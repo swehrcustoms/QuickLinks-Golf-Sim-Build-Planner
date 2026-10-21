@@ -506,6 +506,8 @@ tr.grand td { font-family: var(--display); font-size: 22px; border-top: 2px soli
 .s-screen { fill: var(--screen); stroke: var(--ink); stroke-width: 3; }
 .s-image { fill: var(--sky2); stroke: var(--cad); stroke-width: 1; stroke-dasharray: 4 3; }
 .s-panel { fill: var(--wallfill); stroke: var(--muted); stroke-width: 1; }
+.s-hush { fill: #2c312f; stroke: #d7e0d8; stroke-width: 0.55; }
+.s-hushceil { fill: #3c4642; stroke: #e7eeea; stroke-width: 0.7; opacity: 0.62; }
 .s-equip { fill: var(--surface); stroke: var(--ink); stroke-width: 1.6; }
 .s-equipfill { fill: var(--ink); }
 .s-throw { fill: var(--cad); opacity: 0.08; stroke: var(--cad); stroke-width: 1; stroke-dasharray: 5 4; }
@@ -544,6 +546,12 @@ tr.grand td { font-family: var(--display); font-size: 22px; border-top: 2px soli
 .s-tv { fill: #111; stroke: var(--ink); stroke-width: 1.5; }
 .s-stud { stroke: var(--muted); stroke-width: 0.5; opacity: 0.6; }
 .s-zone { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.s-center { stroke: var(--cad); stroke-width: 1.25; stroke-dasharray: 5 4; fill: none; pointer-events: none; }
+.drawing svg * { pointer-events: none; }
+.s-hit { fill: transparent; stroke: transparent; pointer-events: all; }
+.s-drag { cursor: grab; touch-action: none; }
+.s-drag:hover .s-hit { stroke: var(--cad); stroke-width: 1.2; }
+body.dragging, body.dragging * { cursor: grabbing !important; user-select: none; }
 
 @media (max-width: 1200px) {
   .grid2 { grid-template-columns: minmax(0, 1fr); }

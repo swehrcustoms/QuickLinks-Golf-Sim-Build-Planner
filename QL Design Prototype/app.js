@@ -35,30 +35,30 @@ const SOFT = [
 
 const DEFAULT_PB = {
   laborRate: 95, taxRate: 7, designFee: 450, discount: 0,
-  screenSqft: 24, frameKit: 1450, panel: 185, turfSqft: 6.5, cup: 85, matCutout: 350,
+  screenSqft: 24, frameKit: 1450, panel: 60, turfSqft: 6.5, cup: 85, matCutout: 350,
   lmMount: 250, projMount: 275, computer: 2200, monitor: 280, tv: 950, tvMount: 140, cablePerFt: 4.5,
   'lm:trackman-io': 19995, 'lm:uneekor-xo2': 15995, 'lm:protee-vx': 4499, 'lm:fs-gchawk': 16999,
   'lm:fs-gcquad': 16000, 'lm:garmin-r50': 4999, 'lm:uneekor-mini': 5999, 'lm:radar-rear': 1500,
   'pj:st4k': 3299, 'pj:st1080': 1599, 'pj:std1080': 999, 'pj:custom': 2000,
   'mat:m45': 900, 'mat:m55': 1350, 'mat:m510': 2600,
   'sw:gspro': 250, 'sw:e6': 300, 'sw:awesome': 1000, 'sw:bundled': 0,
-  'hr:screen': 6, 'hr:panel': 0.5, 'hr:turf100': 1.5, 'hr:cup': 0.75, 'hr:mat': 2,
+  'hr:screen': 6, 'hr:panel': 0.2, 'hr:turf100': 1.5, 'hr:cup': 0.75, 'hr:mat': 2,
   'hr:lmOver': 3, 'hr:lmFloor': 1, 'hr:proj': 3, 'hr:pc': 2, 'hr:tv': 1.5, 'hr:mon': 1, 'hr:cal': 2,
 };
 
 const PB_LABELS = [
   ['General', [['laborRate', 'Labor rate ($/hr)'], ['taxRate', 'Sales tax on equipment (%)'], ['designFee', 'Design + CAD package ($)'], ['discount', 'Default discount ($)']]],
-  ['Screen, walls, floor', [['screenSqft', 'Impact screen ($/sq ft)'], ['frameKit', 'Built-in frame + padding kit ($)'], ['panel', "Wall panel 4'×8' padded ($ ea)"], ['turfSqft', 'Turf ($/sq ft installed material)'], ['cup', 'Putting cup ($ ea)'], ['matCutout', 'Mat inset / cutout framing ($)'], ['mat:m45', "Mat · 4'×5' ($)"], ['mat:m55', "Mat · 5'×5' dual ($)"], ['mat:m510', "Mat · 5'×10' platform ($)"]]],
+  ['Screen, walls, floor', [['screenSqft', 'Impact screen ($/sq ft)'], ['frameKit', 'Built-in frame + padding kit ($)'], ['panel', "HUSH panel 2'×2' ($ ea)"], ['turfSqft', 'Turf ($/sq ft installed material)'], ['cup', 'Putting cup ($ ea)'], ['matCutout', 'Mat inset / cutout framing ($)'], ['mat:m45', "Mat · 4'×5' ($)"], ['mat:m55', "Mat · 5'×5' dual ($)"], ['mat:m510', "Mat · 5'×10' platform ($)"]]],
   ['Launch monitors', LMS.map((item) => ['lm:' + item.id, item.name + ' ($)']).concat([['lmMount', 'Overhead LM mount ($)']])],
   ['Projection + tech', PROJS.map((item) => ['pj:' + item.id, item.name + ' ($)']).concat([['projMount', 'Projector mount ($)'], ['computer', 'Sim PC ($)'], ['monitor', 'Monitor ($)'], ['tv', 'TV ($ ea)'], ['tvMount', 'TV mount ($ ea)'], ['cablePerFt', 'Cabling + tube ($/ft)']])],
   ['Software', SOFT.map((item) => ['sw:' + item.id, item.name + ' ($)'])],
-  ['Labor hours', [['hr:screen', 'Screen system (hr)'], ['hr:panel', 'Per wall panel (hr)'], ['hr:turf100', 'Turf per 100 sq ft (hr)'], ['hr:cup', 'Per putting cup (hr)'], ['hr:mat', 'Mat inset (hr)'], ['hr:lmOver', 'Overhead LM (hr)'], ['hr:lmFloor', 'Floor LM (hr)'], ['hr:proj', 'Projector (hr)'], ['hr:pc', 'Computer + cabling (hr)'], ['hr:tv', 'Per TV (hr)'], ['hr:mon', 'Monitor (hr)'], ['hr:cal', 'Calibration + walkthrough (hr)']]],
+  ['Labor hours', [['hr:screen', 'Screen system (hr)'], ['hr:panel', 'Per HUSH panel (hr)'], ['hr:turf100', 'Turf per 100 sq ft (hr)'], ['hr:cup', 'Per putting cup (hr)'], ['hr:mat', 'Mat inset (hr)'], ['hr:lmOver', 'Overhead LM (hr)'], ['hr:lmFloor', 'Floor LM (hr)'], ['hr:proj', 'Projector (hr)'], ['hr:pc', 'Computer + cabling (hr)'], ['hr:tv', 'Per TV (hr)'], ['hr:mon', 'Monitor (hr)'], ['hr:cal', 'Calibration + walkthrough (hr)']]],
 ];
 
 const DEFAULT_SPEC = {
   W: 192, D: 240, H: 120, handed: 'RH', golferH: 72, ballX: 0, teeDist: 132,
   screenOffset: 12, sideTrim: 6, topGap: 6, floorGap: 0, aspect: '16:9',
-  panelWalls: ['left', 'right'], panelH: 96, panelRun: 168,
+  panelWalls: ['left', 'right', 'ceiling'], panelH: 96, panelRun: 168,
   lm: 'uneekor-xo2', lmAdj: 0, software: 'gspro',
   proj: 'st4k', tr: 0.81, projDrop: 8,
   compWall: 'rear', compPos: 24, monitor: 'wall', tvCount: 1, tvWall: 'left', tvSize: 65, tvH: 66,
@@ -199,7 +199,7 @@ function compute(sp) {
     lm = { x: ball.x + opposite * 26, y: ball.y, z: 0, w: 10, d: 12, mount: 'floor' };
     if (handed === 'Both') chk.push(['warn', 'A floor launch monitor must be moved to the opposite side for left-handed players. Plan an outlet on both sides.']);
   } else {
-    lm = { x: ball.x, y: Math.min(D - 12, ball.y + 96), z: 0, w: 8, d: 8, mount: 'floor' };
+    lm = { x: ball.x, y: Math.min(D - 12, Math.max(ball.y + 36, ball.y + 96 + (+sp.lmAdj || 0))), z: 0, w: 8, d: 8, mount: 'floor' };
     if (D - ball.y < 96) chk.push(['warn', 'Rear radar needs about 8 ft behind the ball. This room is short for that unit.']);
   }
   lm.name = launch.name;
@@ -224,16 +224,50 @@ function compute(sp) {
   if (launch.type === 'overhead' && Math.hypot(pj.x - lm.x, pj.y - lm.y) < 24) chk.push(['warn', "Projector and overhead launch monitor are within 2 ft of each other. Confirm the launch monitor's field of view is clear."]);
 
   const panels = [];
+  const HUSH = 24;
+  const HUSH_GAP = 1.5;
   const run = Math.min(Math.max(0, +sp.panelRun || 0), Math.max(0, D - scr.y));
-  (sp.panelWalls || []).forEach((wall) => {
-    const len = wall === 'rear' ? W : run;
-    const count = Math.ceil(len / 48);
+  const panelHeight = Math.min(Math.max(0, +sp.panelH || 0), H);
+  const hushSpans = (start, span) => {
+    const tiles = [];
+    if (span <= 1) return tiles;
+    const count = Math.ceil(span / HUSH - 1e-6);
     for (let i = 0; i < count; i += 1) {
-      const a0 = wall === 'rear' ? i * 48 : scr.y + i * 48;
-      const a1 = Math.min(a0 + 48, wall === 'rear' ? W : scr.y + run);
-      if (a1 > a0) panels.push({ wall, a0, a1, z0: 0, z1: Math.min(+sp.panelH || 0, H) });
+      const a0 = start + i * HUSH;
+      const a1 = Math.min(start + span, a0 + HUSH);
+      if (a1 - a0 > 1) tiles.push([a0, a1]);
     }
+    return tiles;
+  };
+  const hushInset = (a0, a1) => {
+    const gap = Math.min(HUSH_GAP, (a1 - a0) * 0.22);
+    return [a0 + gap / 2, a1 - gap / 2];
+  };
+  (sp.panelWalls || []).forEach((wall) => {
+    if (wall === 'ceiling') {
+      hushSpans(0, W).forEach(([x0, x1]) => {
+        hushSpans(scr.y, run).forEach(([y0, y1]) => {
+          const [ix0, ix1] = hushInset(x0, x1);
+          const [iy0, iy1] = hushInset(y0, y1);
+          panels.push({ wall: 'ceiling', x0: ix0, x1: ix1, y0: iy0, y1: iy1, a0: y0, a1: y1, z0: H - 1, z1: H });
+        });
+      });
+      return;
+    }
+    const alongStart = wall === 'rear' ? 0 : scr.y;
+    const alongLen = wall === 'rear' ? W : run;
+    hushSpans(alongStart, alongLen).forEach(([a0, a1]) => {
+      hushSpans(0, panelHeight).forEach(([z0, z1]) => {
+        const [ia0, ia1] = hushInset(a0, a1);
+        const [iz0, iz1] = hushInset(z0, z1);
+        panels.push({ wall, a0: ia0, a1: ia1, z0: iz0, z1: iz1 });
+      });
+    });
   });
+  if (panels.length) {
+    const uneven = [W, run, panelHeight].some((span) => span > 1 && Math.abs(span / HUSH - Math.round(span / HUSH)) > 0.04);
+    if (uneven) chk.push(['warn', 'A coverage dimension is not a multiple of 2 ft. Edge HUSH panels are shown as cut positions. Confirm those cuts before ordering.']);
+  }
 
   const cab = { wall: sp.compWall, w: 36, d: 22, h: 34 };
   const compPos = +sp.compPos || 0;
@@ -251,7 +285,8 @@ function compute(sp) {
   let mon = null;
   if (sp.monitor === 'wall') {
     const wall = handed === 'LH' ? 'left' : 'right';
-    mon = { wall, a: ball.y - 6, z: 48, w: 24, h: 14 };
+    const along = sp.monAlong != null && sp.monAlong !== '' ? +sp.monAlong : ball.y - 6;
+    mon = { wall, a: Math.min(Math.max(along, scr.y + 12), D - 12), z: 48, w: 24, h: 14 };
   } else if (sp.monitor === 'cabinet') {
     mon = { wall: cab.wall, a: cab.a, z: cab.h + 10, w: 24, h: 14, onCab: true };
   }
@@ -267,8 +302,11 @@ function compute(sp) {
       const y0 = ball.y + 36;
       const y1 = D - tvW / 2 - 6;
       along = tvCount === 1 ? (y0 + y1) / 2 : y0 + (y1 - y0) * i / (tvCount - 1 || 1);
-      along = Math.min(Math.max(along, scr.y + tvW / 2), D - tvW / 2);
     }
+    if (sp.tvPos && sp.tvPos[i] != null && sp.tvPos[i] !== '') along = +sp.tvPos[i];
+    along = sp.tvWall === 'rear'
+      ? Math.min(Math.max(along, tvW / 2), W - tvW / 2)
+      : Math.min(Math.max(along, scr.y + tvW / 2), D - tvW / 2);
     tvs.push({ wall: sp.tvWall, a: along, z: +sp.tvH || 66, w: tvW, h: tvHt, size: +sp.tvSize || 65 });
   }
 
@@ -315,10 +353,15 @@ function compute(sp) {
   tvs.forEach((tv, index) => backing.push({ id: 'B' + (6 + index), label: `TV ${index + 1} backing (${tv.size}")`, where: cap(tv.wall) + ' wall', spec: '2×8 horizontal backing, two rows, spanning the mount plus 12"', wall: tv.wall, a0: tv.a - tv.w / 2 + 6, a1: tv.a + tv.w / 2 - 6, z0: tv.z - 14, z1: tv.z + 14, ...wallXY(tv.wall, tv.a, W, D), z: tv.z, size: `${ftin(tv.w - 12)} × 28"` }));
   if (mon && !mon.onCab) backing.push({ id: 'B9', label: 'Monitor arm backing', where: cap(mon.wall) + ' wall', spec: '2×8 backing 16"×16"', wall: mon.wall, a0: mon.a - 8, a1: mon.a + 8, z0: mon.z - 8, z1: mon.z + 8, ...wallXY(mon.wall, mon.a, W, D), z: mon.z, size: '16" × 16"' });
   (sp.panelWalls || []).forEach((wall, index) => {
+    if (wall === 'ceiling') {
+      backing.push({ id: 'P' + (index + 1), label: 'HUSH ceiling furring', where: 'Ceiling', spec: 'Hat channel or 1×4 furring at 24 in o.c. both ways. Keep the grid clear of the projector, launch monitor, and no-fixture ring.', plan: { x: 0, y: scr.y, w: W, d: run }, x: W / 2, y: scr.y + run / 2, z: H, size: `${ftin(W)} × ${ftin(run)}` });
+      return;
+    }
     const a0 = wall === 'rear' ? 0 : scr.y;
     const a1 = wall === 'rear' ? W : scr.y + run;
-    const rows = [3, 48, Math.min(+sp.panelH || 0, H) - 3].filter((row) => row > 0 && row < H);
-    backing.push({ id: 'P' + (index + 1), label: `Wall panel nailers — ${wall} wall`, where: cap(wall) + ' wall', spec: `2×4 flat blocking rows at 3", 48" and ${Math.min(+sp.panelH || 0, H) - 3}" above finished floor. Studs 16" o.c. at panel seams (48").`, wall, a0, a1, z0: 0, z1: Math.min(+sp.panelH || 0, H), rows, ...wallXY(wall, (a0 + a1) / 2, W, D), z: Math.min(+sp.panelH || 0, H) / 2, size: `${ftin(a1 - a0)} run` });
+    const rows = [];
+    for (let row = 24; row < panelHeight; row += 24) rows.push(row);
+    backing.push({ id: 'P' + (index + 1), label: `HUSH nailers — ${wall} wall`, where: cap(wall) + ' wall', spec: '2×4 flat blocking at each horizontal seam (every 24 in) and studs on the vertical seams.', wall, a0, a1, z0: 0, z1: panelHeight, rows, ...wallXY(wall, (a0 + a1) / 2, W, D), z: panelHeight / 2, size: `${ftin(a1 - a0)} run` });
   });
   backing.push({ id: 'B10', label: 'Computer cabinet backing', where: cap(cab.wall) + ' wall', spec: '2×6 horizontal backing at 30"–36" above finished floor for cabinet anchors', wall: cab.wall, a0: cab.a - cab.w / 2, a1: cab.a + cab.w / 2, z0: 28, z1: 38, ...wallXY(cab.wall, cab.a, W, D), z: 33, size: `${ftin(cab.w)} × 10"` });
 
@@ -360,7 +403,7 @@ function quote(sp, plan, pb) {
   const sqft = plan.scr.w * plan.scr.h / 144;
   add('Screen & enclosure', 'Impact screen, wall-to-wall built-in', r1(sqft), 'sq ft', pb.screenSqft, pb['hr:screen']);
   add('Screen & enclosure', 'Built-in frame + padding kit', 1, 'kit', pb.frameKit, 0);
-  if (plan.panels.length) add('Screen & enclosure', `Wall panels (${(sp.panelWalls || []).join(', ')})`, plan.panels.length, 'ea', pb.panel, plan.panels.length * pb['hr:panel']);
+  if (plan.panels.length) add('Screen & enclosure', `HUSH panels, 2×2 ft (${(sp.panelWalls || []).join(', ')})`, plan.panels.length, 'ea', pb.panel, plan.panels.length * (pb['hr:panel'] || 0));
   const turfSq = Math.max(0, (plan.turfArea - plan.cutArea) / 144);
   add('Floor', 'Turf ' + (sp.turf === 'full' ? '(full room)' : '(hitting bay)'), Math.round(turfSq), 'sq ft', pb.turfSqft, turfSq / 100 * pb['hr:turf100']);
   add('Floor', plan.mat.name, 1, 'ea', pb['mat:' + sp.mat] || 0, 0);
@@ -420,10 +463,45 @@ function tagPos(item, W, D, fs) {
   return { x: (item.a0 + item.a1) / 2, y: D - fs * 1.4 };
 }
 
+function savedTag(id) {
+  const tag = S.job && S.job.spec && S.job.spec.tags && S.job.spec.tags[id];
+  if (!tag || !Number.isFinite(+tag.x) || !Number.isFinite(+tag.y)) return null;
+  return { x: +tag.x, y: +tag.y };
+}
+
 function planSVG(plan, mode) {
   const { W, D } = plan;
   const pad = Math.max(W, D) * 0.16;
   const fs = Math.max(W, D) / 42;
+  const centerX = W / 2;
+  const occupied = [];
+  const spread = (x, y) => {
+    let px = x;
+    let py = y;
+    const towardX = Math.sign(centerX - x) || 0;
+    const towardY = Math.sign(D / 2 - y) || -1;
+    for (let n = 0; n < 14; n += 1) {
+      const crowded = occupied.some((spot) => Math.hypot(spot.x - px, spot.y - py) < fs * 2.35);
+      if (!crowded) break;
+      px += towardX * fs * 0.45 + (n % 2 ? fs * 1.7 : -fs * 1.7);
+      py += towardY * fs * 1.7;
+    }
+    px = Math.max(fs, Math.min(W - fs, px));
+    py = Math.max(fs, Math.min(D - fs, py));
+    occupied.push({ x: px, y: py });
+    return { x: px, y: py };
+  };
+  const dragTag = (id, x, y, radius, color) => {
+    const kept = savedTag(id);
+    const pos = kept || spread(x, y);
+    if (kept) occupied.push(pos);
+    const handle = mode === 'builder'
+      ? `<g class="s-drag" data-drag="tag" data-id="${esc(id)}" aria-label="${esc(id)} tag. Drag to move this label.">`
+      : '';
+    return handle + callout(pos.x, pos.y, id, radius, color) + (mode === 'builder' ? `<circle class="s-hit" cx="${pos.x}" cy="${pos.y}" r="${radius * 1.7}"/></g>` : '');
+  };
+  const dragOpen = (kind, label, extra = '') => (mode === 'builder' && kind ? `<g class="s-drag" data-drag="${kind}" ${extra} aria-label="${esc(label)}">` : '');
+  const dragClose = (kind) => (mode === 'builder' && kind ? '</g>' : '');
   let markup = `<svg viewBox="${[-pad, -pad, W + pad * 2, D + pad * 2].join(' ')}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Plan view">`;
   for (let x = 0; x <= W; x += 12) markup += `<line class="s-grid" x1="${x}" y1="0" x2="${x}" y2="${D}"/>`;
   for (let y = 0; y <= D; y += 12) markup += `<line class="s-grid" x1="0" y1="${y}" x2="${W}" y2="${y}"/>`;
@@ -432,10 +510,14 @@ function planSVG(plan, mode) {
   markup += `<rect class="s-turf" x="${turfLeft}" y="${plan.scr.y}" width="${turfRight - turfLeft}" height="${Math.max(0, D - plan.scr.y)}"/>`;
   if (mode === 'builder') markup += `<circle class="s-nofix" cx="${plan.nofix.x}" cy="${plan.nofix.y}" r="${plan.nofix.r}"/><text class="s-lblm" x="${plan.nofix.x}" y="${plan.nofix.y + plan.nofix.r - fs * 0.6}" text-anchor="middle" font-size="${fs * 0.75}">No ceiling fixtures in this ring</text>`;
   plan.panels.forEach((panel) => {
-    const thickness = 4;
-    if (panel.wall === 'left') markup += `<rect class="s-panel" x="0" y="${panel.a0}" width="${thickness}" height="${panel.a1 - panel.a0}"/>`;
-    else if (panel.wall === 'right') markup += `<rect class="s-panel" x="${W - thickness}" y="${panel.a0}" width="${thickness}" height="${panel.a1 - panel.a0}"/>`;
-    else markup += `<rect class="s-panel" x="${panel.a0}" y="${D - thickness}" width="${panel.a1 - panel.a0}" height="${thickness}"/>`;
+    if (panel.wall === 'ceiling') {
+      markup += `<rect class="s-hushceil" x="${panel.x0}" y="${panel.y0}" width="${panel.x1 - panel.x0}" height="${panel.y1 - panel.y0}"/>`;
+      return;
+    }
+    const thickness = 5;
+    if (panel.wall === 'left') markup += `<rect class="s-hush" x="0" y="${panel.a0}" width="${thickness}" height="${Math.max(0.4, panel.a1 - panel.a0)}"/>`;
+    else if (panel.wall === 'right') markup += `<rect class="s-hush" x="${W - thickness}" y="${panel.a0}" width="${thickness}" height="${Math.max(0.4, panel.a1 - panel.a0)}"/>`;
+    else markup += `<rect class="s-hush" x="${panel.a0}" y="${D - thickness}" width="${Math.max(0.4, panel.a1 - panel.a0)}" height="${thickness}"/>`;
   });
   if (plan.green) {
     const green = plan.green;
@@ -443,9 +525,14 @@ function planSVG(plan, mode) {
   }
   plan.cups.forEach((cup) => { markup += `<circle class="s-cup" cx="${cup.x}" cy="${cup.y}" r="${mode === 'sales' ? 3 : 2.2}"/>`; });
   const mat = plan.mat;
+  if (mode === 'builder') markup += `<line class="s-center" x1="${centerX}" y1="${plan.scr.y}" x2="${centerX}" y2="${D}"/>`;
+  markup += dragOpen('ball', 'Hitting position. Stays centered on the screen. Drag toward or away from the screen.');
   markup += `<rect class="s-mat" x="${mat.x}" y="${mat.y}" width="${mat.w}" height="${mat.d}"/>`;
   if (S.job.spec.matCutout) markup += `<rect class="s-matcut" x="${mat.x - 1}" y="${mat.y - 1}" width="${mat.w + 2}" height="${mat.d + 2}"/>`;
   markup += `<rect class="s-strip" x="${plan.ball.x - 6}" y="${plan.ball.y - 10}" width="12" height="20"/>`;
+  markup += `<circle class="s-ball" cx="${plan.ball.x}" cy="${plan.ball.y}" r="2"/>`;
+  if (mode === 'builder') markup += `<rect class="s-hit" x="${mat.x}" y="${mat.y}" width="${mat.w}" height="${mat.d}"/>`;
+  markup += dragClose('ball');
   markup += `<rect class="s-screen" x="${plan.scr.x0}" y="${plan.scr.y - 1.5}" width="${plan.scr.w}" height="3"/>`;
   if (mode !== 'builder') markup += `<polygon class="s-throw" points="${plan.pj.x},${plan.pj.y} ${plan.img.x0},${plan.scr.y} ${plan.img.x1},${plan.scr.y}"/>`;
   if (mode !== 'builder') {
@@ -453,30 +540,45 @@ function planSVG(plan, mode) {
       markup += `<circle class="s-swing" cx="${golfer.x}" cy="${golfer.y}" r="${plan.swingR}"/><ellipse class="s-golfer" cx="${golfer.x}" cy="${golfer.y}" rx="9" ry="14"/>`;
     });
   }
-  markup += `<circle class="s-ball" cx="${plan.ball.x}" cy="${plan.ball.y}" r="2"/>`;
   const cabinet = plan.cab;
   let cabinetRect;
   if (cabinet.wall === 'rear') cabinetRect = { x: cabinet.a - cabinet.w / 2, y: D - cabinet.d, w: cabinet.w, h: cabinet.d };
   else if (cabinet.wall === 'left') cabinetRect = { x: 0, y: cabinet.a - cabinet.w / 2, w: cabinet.d, h: cabinet.w };
   else cabinetRect = { x: W - cabinet.d, y: cabinet.a - cabinet.w / 2, w: cabinet.d, h: cabinet.w };
+  markup += dragOpen('cab', 'Computer cabinet. Drag along its wall.');
   markup += `<rect class="s-equip" x="${cabinetRect.x}" y="${cabinetRect.y}" width="${cabinetRect.w}" height="${cabinetRect.h}"/>`;
+  if (mode === 'builder') markup += `<rect class="s-hit" x="${cabinetRect.x}" y="${cabinetRect.y}" width="${cabinetRect.w}" height="${cabinetRect.h}"/>`;
+  markup += dragClose('cab');
   const wallRect = (wall, along, width, thickness) => {
     if (wall === 'left') return { x: 0, y: along - width / 2, w: thickness, h: width };
     if (wall === 'right') return { x: W - thickness, y: along - width / 2, w: thickness, h: width };
     if (wall === 'rear') return { x: along - width / 2, y: D - thickness, w: width, h: thickness };
     return { x: along - width / 2, y: 0, w: width, h: thickness };
   };
-  plan.tvs.forEach((tv) => {
+  plan.tvs.forEach((tv, index) => {
     const rect = wallRect(tv.wall, tv.a, tv.w, 5);
+    markup += dragOpen('tv', `TV ${index + 1}. Drag along the wall.`, `data-i="${index}"`);
     markup += `<rect class="s-tv" x="${rect.x}" y="${rect.y}" width="${rect.w}" height="${rect.h}"/>`;
+    if (mode === 'builder') markup += `<rect class="s-hit" x="${rect.x - 4}" y="${rect.y - 4}" width="${rect.w + 8}" height="${rect.h + 8}"/>`;
+    markup += dragClose('tv');
   });
   if (plan.mon && !plan.mon.onCab) {
     const rect = wallRect(plan.mon.wall, plan.mon.a, plan.mon.w, 4);
+    markup += dragOpen('mon', 'Monitor. Drag along the wall.');
     markup += `<rect class="s-tv" x="${rect.x}" y="${rect.y}" width="${rect.w}" height="${rect.h}"/>`;
+    if (mode === 'builder') markup += `<rect class="s-hit" x="${rect.x - 4}" y="${rect.y - 4}" width="${rect.w + 8}" height="${rect.h + 8}"/>`;
+    markup += dragClose('mon');
   }
   const launch = plan.lm;
+  const launchOnCenter = launch.mount === 'ceiling' || launch.type === 'radar';
+  markup += dragOpen(launchOnCenter ? 'lm' : '', launchOnCenter ? 'Launch monitor. Stays centered on the screen. Drag toward or away from the screen.' : '');
   markup += `<rect class="${launch.mount === 'ceiling' ? 's-equip' : 's-equipfill'}" x="${launch.x - launch.w / 2}" y="${launch.y - launch.d / 2}" width="${launch.w}" height="${launch.d}" ${launch.mount === 'ceiling' ? 'stroke-dasharray="3 2"' : ''}/>`;
+  if (mode === 'builder' && launchOnCenter) markup += `<rect class="s-hit" x="${launch.x - launch.w / 2 - 4}" y="${launch.y - launch.d / 2 - 4}" width="${launch.w + 8}" height="${launch.d + 8}"/>`;
+  markup += dragClose(launchOnCenter ? 'lm' : '');
+  markup += dragOpen('proj', 'Projector. Stays centered on the screen. Drag toward or away from the screen.');
   markup += `<rect class="s-equip" x="${plan.pj.x - 10}" y="${plan.pj.y - 8}" width="20" height="16" stroke-dasharray="3 2"/><circle class="s-equipfill" cx="${plan.pj.x}" cy="${plan.pj.y - 8}" r="3"/>`;
+  if (mode === 'builder') markup += `<rect class="s-hit" x="${plan.pj.x - 14}" y="${plan.pj.y - 12}" width="28" height="24"/>`;
+  markup += dragClose('proj');
   if (mode === 'builder') {
     plan.backing.forEach((item) => {
       if (item.plan) markup += `<rect class="s-backing" x="${item.plan.x}" y="${item.plan.y}" width="${item.plan.w}" height="${item.plan.d}"/>`;
@@ -495,9 +597,9 @@ function planSVG(plan, mode) {
     plan.data.forEach((item) => { markup += `<polygon class="s-data" points="${item.x},${item.y - fs * 0.45} ${item.x + fs * 0.4},${item.y + fs * 0.3} ${item.x - fs * 0.4},${item.y + fs * 0.3}"/>`; });
     plan.backing.forEach((item) => {
       const pos = tagPos(item, W, D, fs);
-      markup += callout(pos.x, pos.y, item.id, fs * 0.62, 'var(--backing)');
+      markup += dragTag(item.id, pos.x, pos.y, fs * 0.62, 'var(--backing)');
     });
-    plan.elec.forEach((item) => { markup += callout(clampIn(item.x + fs * 1.1, W), clampIn(item.y - fs * 0.9, D), item.id, fs * 0.55, 'var(--elec)'); });
+    plan.elec.forEach((item) => { markup += dragTag(item.id, clampIn(item.x + fs * 1.1, W), clampIn(item.y - fs * 0.9, D), fs * 0.55, 'var(--elec)'); });
   }
   markup += `<rect class="s-wall" x="0" y="0" width="${W}" height="${D}"/>`;
   markup += `<text class="s-lbl" x="${W / 2}" y="${-pad * 0.62}" text-anchor="middle" font-size="${fs}">SCREEN WALL</text>`;
@@ -562,8 +664,26 @@ function elevSVG(plan, wall, mode) {
   plan.panels.filter((panel) => panel.wall === wall).forEach((panel) => {
     const x0 = Math.min(U(panel.a0), U(panel.a1));
     const x1 = Math.max(U(panel.a0), U(panel.a1));
-    markup += `<rect class="s-panel" x="${x0}" y="${Z(panel.z1)}" width="${x1 - x0}" height="${panel.z1 - panel.z0}" style="opacity:.8"/>`;
+    markup += `<rect class="s-hush" x="${x0}" y="${Z(panel.z1)}" width="${Math.max(0.4, x1 - x0)}" height="${Math.max(0.4, panel.z1 - panel.z0)}"/>`;
   });
+  if (wall === 'left' || wall === 'right' || wall === 'screen') {
+    const seen = new Set();
+    plan.panels.filter((panel) => panel.wall === 'ceiling').forEach((panel) => {
+      if (wall === 'screen') {
+        const key = panel.x0.toFixed(1);
+        if (seen.has(key)) return;
+        seen.add(key);
+        markup += `<rect class="s-hush" x="${panel.x0}" y="0" width="${Math.max(0.4, panel.x1 - panel.x0)}" height="4"/>`;
+      } else {
+        const key = panel.y0.toFixed(1);
+        if (seen.has(key)) return;
+        seen.add(key);
+        const x0 = Math.min(U(panel.y0), U(panel.y1));
+        const x1 = Math.max(U(panel.y0), U(panel.y1));
+        markup += `<rect class="s-hush" x="${x0}" y="0" width="${Math.max(0.4, x1 - x0)}" height="4"/>`;
+      }
+    });
+  }
   if (plan.cab.wall === wall) {
     const x = U(plan.cab.a);
     markup += `<rect class="s-equip" x="${x - plan.cab.w / 2}" y="${Z(plan.cab.h)}" width="${plan.cab.w}" height="${plan.cab.h}"/><text class="s-lblm" x="${x}" y="${Z(plan.cab.h / 2)}" text-anchor="middle" font-size="${fs * 0.65}">PC cabinet</text>`;
@@ -639,13 +759,16 @@ function perspectiveSVG(plan) {
   const pad = (maxX - minX) * 0.04;
   let markup = `<svg viewBox="${minX - pad} ${minY - pad} ${maxX - minX + pad * 2} ${maxY - minY + pad * 2}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Rendered view of the simulator bay"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--sky1)"/><stop offset="1" stop-color="var(--sky2)"/></linearGradient><pattern id="turfp" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" class="s-floor"/><path d="M0 6 L3 0" class="s-stud" style="stroke:var(--turf2);opacity:.5"/></pattern></defs>`;
   markup += poly([[0, 0, H], [W, 0, H], [W, D, H], [0, D, H]], 's-ceil');
+  plan.panels.filter((panel) => panel.wall === 'ceiling').forEach((panel) => {
+    markup += poly([[panel.x0, panel.y0, H - 0.4], [panel.x1, panel.y0, H - 0.4], [panel.x1, panel.y1, H - 0.4], [panel.x0, panel.y1, H - 0.4]], 's-hush', 'style="stroke-width:2.4"');
+  });
   markup += poly([[0, 0, 0], [0, D, 0], [0, D, H], [0, 0, H]], 's-side');
   markup += poly([[W, 0, 0], [W, D, 0], [W, D, H], [W, 0, H]], 's-side2');
   markup += poly([[0, 0, 0], [W, 0, 0], [W, 0, H], [0, 0, H]], 's-side2');
   markup += poly([[0, plan.scr.y, 0], [W, plan.scr.y, 0], [W, D, 0], [0, D, 0]], 's-floor', 'fill="url(#turfp)"');
   plan.panels.forEach((panel) => {
-    if (panel.wall === 'left') markup += poly([[0.5, panel.a0 + 1, panel.z0], [0.5, panel.a1 - 1, panel.z0], [0.5, panel.a1 - 1, panel.z1], [0.5, panel.a0 + 1, panel.z1]], 's-panel');
-    if (panel.wall === 'right') markup += poly([[W - 0.5, panel.a0 + 1, panel.z0], [W - 0.5, panel.a1 - 1, panel.z0], [W - 0.5, panel.a1 - 1, panel.z1], [W - 0.5, panel.a0 + 1, panel.z1]], 's-panel');
+    if (panel.wall === 'left') markup += poly([[0.8, panel.a0, panel.z0], [0.8, panel.a1, panel.z0], [0.8, panel.a1, panel.z1], [0.8, panel.a0, panel.z1]], 's-hush', 'style="stroke-width:2"');
+    if (panel.wall === 'right') markup += poly([[W - 0.8, panel.a0, panel.z0], [W - 0.8, panel.a1, panel.z0], [W - 0.8, panel.a1, panel.z1], [W - 0.8, panel.a0, panel.z1]], 's-hush', 'style="stroke-width:2"');
   });
   plan.tvs.forEach((tv) => {
     if (tv.wall === 'left' || tv.wall === 'right') {
@@ -730,10 +853,14 @@ function placements(plan) {
   (spec.panelWalls || []).forEach((wall) => {
     const wallPanels = plan.panels.filter((panel) => panel.wall === wall);
     if (!wallPanels.length) return;
-    const start = wallPanels[0].a0;
-    const end = wallPanels[wallPanels.length - 1].a1;
+    if (wall === 'ceiling') {
+      add(`HUSH ceiling panels (${wallPanels.length})`, plan.W / 2, plan.scr.y, 'Ceiling', 'Ceiling grid', `Nominal 2 ft × 2 ft tiles, full width, from the screen line back ${ftin(plan.run)}.`, plan.W / 2, plan.scr.y + plan.run / 2);
+      return;
+    }
+    const start = Math.min(...wallPanels.map((panel) => panel.a0));
+    const end = Math.max(...wallPanels.map((panel) => panel.a1));
     const point = wallXY(wall, start, plan.W, plan.D);
-    add(`Wall panels — ${wall} (${wallPanels.length})`, r1(point.x), r1(point.y), `0–${ftin(wallPanels[0].z1)}`, cap(wall) + ' wall', `Start at the ${wall === 'rear' ? 'left corner' : 'screen line'}. Run ${ftin(end - start)}. 48 in panels.`);
+    add(`HUSH wall panels — ${wall} (${wallPanels.length})`, r1(point.x), r1(point.y), `0–${ftin(Math.max(...wallPanels.map((panel) => panel.z1)))}`, cap(wall) + ' wall', `2 ft × 2 ft tiles. Start at the ${wall === 'rear' ? 'left corner' : 'screen line'} and run ${ftin(end - start)}.`);
   });
   add('Turf', 0, plan.scr.y, 0, 'Floor', `${spec.turf === 'full' ? 'Wall to wall' : 'Screen width'} from the screen line to the rear wall. About ${Math.round((plan.turfArea - plan.cutArea) / 144)} sq ft net.`, null, null);
   rows.forEach((row) => { if (row.item === 'Turf') row.px = null; });
@@ -746,7 +873,7 @@ function steps(plan) {
     ['verify', 'Verify rough-in against the builder sheet', 'Backing, receptacles, Cat6, and tech tubes are in place. Photograph each before panels go up.'],
     ['layout', 'Snap layout lines', 'Screen line, target line, ball center, mat outline, projector, and launch-monitor points from the schedule.'],
   ];
-  if (plan.panels.length) list.push(['panels', 'Install wall panels', `${plan.panels.length} panels on the nailer rows, starting at the screen line.`]);
+  if (plan.panels.length) list.push(['panels', 'Install HUSH panels', `${plan.panels.length} nominal 2×2 ft panels. Walls from the floor up. Ceiling from the screen line back ${ftin(plan.run)}, leaving the gap so each panel stays separate.`]);
   list.push(['screen', 'Hang the screen frame and impact screen', 'Fasten to B1–B3 backing. Tension evenly. Check the projected area for wrinkles.']);
   list.push(['turf', 'Lay turf' + (spec.matCutout ? ' and cut the mat inset' : ''), spec.matCutout ? 'Cut the inset to mat size plus 1/8 in. Mat surface sits flush with the turf.' : 'Keep seams away from the hitting area.']);
   if (plan.cups.length) list.push(['cups', 'Cut and set putting cups', `${plan.cups.length} cups per the schedule.`]);
@@ -778,15 +905,15 @@ const FORM = [
     ['s.teeDist', 'Ball to screen (in)', 'number', { hint: 1 }],
     ['s.ballX', 'Ball offset from center (in, + = right)', 'number', { full: 1 }],
   ]],
-  ['Screen & wall panels', [
+  ['Screen & HUSH panels', [
     ['s.screenOffset', 'Screen off back wall (in)', 'number'],
     ['s.sideTrim', 'Side trim each side (in)', 'number'],
     ['s.topGap', 'Gap at ceiling (in)', 'number'],
     ['s.floorGap', 'Screen bottom above floor (in)', 'number'],
     ['s.aspect', 'Image aspect', 'select', { opts: ['16:9', '16:10', '4:3'] }],
-    ['s.panelH', 'Panel height (in)', 'number'],
-    ['s.panelWalls', 'Panel walls', 'checks', { opts: ['left', 'right', 'rear'], full: 1 }],
-    ['s.panelRun', 'Side panels run from screen (in)', 'number', { full: 1, hint: 1 }],
+    ['s.panelH', 'Wall panel height (in)', 'number'],
+    ['s.panelWalls', 'HUSH surfaces', 'checks', { opts: ['left', 'right', 'rear', 'ceiling'], full: 1 }],
+    ['s.panelRun', 'Coverage from screen (in)', 'number', { full: 1, hint: 1 }],
   ]],
   ['Launch monitor', [
     ['s.lm', 'Launch monitor', 'select', { opts: LMS.map((item) => [item.id, item.name]), full: 1 }],
@@ -893,6 +1020,9 @@ function onField(event) {
     if (ratio) ratio.value = S.job.spec.tr;
   }
   if (path === 's.tvCount' || path === 's.cups') S.job.spec[path.slice(2)] = +value;
+  if (path === 's.tvWall' || path === 's.tvCount' || path === 's.tvSize') delete S.job.spec.tvPos;
+  if (path === 's.monitor' || path === 's.handed') delete S.job.spec.monAlong;
+  if (path === 's.compWall') S.job.spec.compPos = 24;
   updateHints();
   markDirty();
   scheduleRender();
@@ -957,10 +1087,10 @@ function salesHTML(plan) {
     <div class="stat"><div class="k">Image</div><div class="v">${ftin(plan.img.w)} × ${ftin(plan.img.h)}</div></div>
     <div class="stat"><div class="k">Estimate</div><div class="v">${money(priced.total)}</div></div>
   </div>
-  <div class="panel"><div class="panel-h"><h2>Client visual</h2><span class="savestate">View from behind the hitting area · ${esc(plan.lm.name)} · ${esc(plan.pj.name.split(' (')[0])}</span></div><div class="panel-b"><div class="drawing">${perspectiveSVG(plan)}</div></div></div>
+  <div class="panel"><div class="panel-h"><h2>Client visual</h2><span class="savestate">View from behind the hitting area · ${esc(plan.lm.name)} · ${esc(plan.pj.name.split(' (')[0])} · ${plan.panels.length} HUSH 2×2 panels</span></div><div class="panel-b"><div class="drawing">${perspectiveSVG(plan)}</div></div></div>
   <div class="grid2">
     <div class="panel"><div class="panel-h"><h2>Floor plan</h2></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'sales')}</div>
-      <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:var(--turf);opacity:.5"></i>Turf</span><span><i class="sw" style="background:var(--green)"></i>Putting green</span><span><i class="sw" style="border:1px dashed var(--warn)"></i>Swing radius</span><span><i class="sw" style="background:var(--cad);opacity:.25"></i>Projector throw</span></div></div></div>
+      <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:#2c312f"></i>HUSH panel</span><span><i class="sw" style="background:var(--turf);opacity:.5"></i>Turf</span><span><i class="sw" style="background:var(--green)"></i>Putting green</span><span><i class="sw" style="border:1px dashed var(--warn)"></i>Swing radius</span><span><i class="sw" style="background:var(--cad);opacity:.25"></i>Projector throw</span></div></div></div>
     <div class="panel"><div class="panel-h"><h2>Space check</h2>${fitPill(plan.fit)}</div><div class="panel-b">${checksHTML(plan)}<p class="savestate" style="margin-top:10px">Clearances are planning rules of thumb. Confirm with a swing test and the manufacturer's install specs before ordering.</p></div></div>
   </div>
   <div class="panel"><div class="panel-h"><h2>Quote</h2><div class="actions"><div class="seg" role="group" aria-label="Quote view"><button type="button" data-act="cv" data-v="0" aria-pressed="${!client}">Internal</button><button type="button" data-act="cv" data-v="1" aria-pressed="${client}">Client</button></div><button type="button" class="btn" data-act="copyquote">Copy quote</button><button type="button" class="btn" data-act="dl-sales">Download proposal</button></div></div>
@@ -975,8 +1105,9 @@ function builderHTML(plan) {
     + plan.data.map((item) => `<tr><td class="m">${esc(item.id)}</td><td>${esc(item.label)}</td><td>${esc(item.spec)}</td><td class="m">X ${ftin(item.x)} · Y ${ftin(item.y)}</td><td class="m">${item.wall ? ftin(item.z) + ' AFF' : 'Ceiling'}</td></tr>`).join('');
   const tubeRows = plan.tubes.map((tube) => `<tr><td class="m">${esc(tube.id)}</td><td>${esc(tube.label)}</td><td class="n">${Math.round(tube.len)} ft</td><td>${tube.cable.len} ft ${tube.cable.aoc ? 'active optical HDMI' : 'HDMI'} + USB/Cat6 pull string</td></tr>`).join('');
   return `<div class="sheet-head"><div><h1>Builder Rough-In CAD</h1><p>For the home builder, remodeler, or the homeowner's trades: backing, receptacles, low-voltage, and 2 in tech tubes before drywall. X is from the left wall facing the screen. Y is from the screen wall.</p></div>${titleBlock()}</div>
-  <div class="panel"><div class="panel-h"><h2>Reflected ceiling + floor plan</h2><button type="button" class="btn" data-act="dl-builder">Download builder sheet</button></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'builder')}</div>
-    <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:var(--backing);opacity:.5"></i>Backing / blocking</span><span><svg width="14" height="14" viewBox="-7 -7 14 14">${elecSym(0, 0, 5.5, 'ceiling')}</svg>Receptacle</span><span><svg width="14" height="14" viewBox="-7 -7 14 14">${elecSym(0, 0, 5.5, 'floor')}</svg>Floor box</span><span><svg width="14" height="14" viewBox="-7 -7 14 14"><polygon class="s-data" points="0,-5 5,4 -5,4"/></svg>Cat6</span><span><i class="sw" style="border-top:2px dashed var(--tube);height:0"></i>2 in tech tube</span><span><i class="sw" style="border:1px dashed var(--bad)"></i>No-fixture ring</span></div></div></div>
+  <div class="panel"><div class="panel-h"><h2>Reflected ceiling + floor plan</h2><div class="actions"><button type="button" class="btn" data-act="reset-tags">Reset tags</button><button type="button" class="btn" data-act="dl-builder">Download builder sheet</button></div></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'builder')}</div>
+    <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:#2c312f"></i>HUSH 2×2</span><span><i class="sw" style="border-top:2px dashed var(--cad);height:0"></i>Screen centerline</span><span><i class="sw" style="background:var(--backing);opacity:.5"></i>Backing / blocking</span><span><svg width="14" height="14" viewBox="-7 -7 14 14">${elecSym(0, 0, 5.5, 'ceiling')}</svg>Receptacle</span><span><svg width="14" height="14" viewBox="-7 -7 14 14">${elecSym(0, 0, 5.5, 'floor')}</svg>Floor box</span><span><svg width="14" height="14" viewBox="-7 -7 14 14"><polygon class="s-data" points="0,-5 5,4 -5,4"/></svg>Cat6</span><span><i class="sw" style="border-top:2px dashed var(--tube);height:0"></i>2 in tech tube</span><span><i class="sw" style="border:1px dashed var(--bad)"></i>No-fixture ring</span></div>
+    <p class="savestate" style="margin-top:8px">Drag the hitting mat, projector, and overhead launch monitor along the dashed centerline. They stay centered on the screen. Drag a TV, monitor, or computer along its wall. Drag a tag if it covers another mark.</p></div></div>
   <div class="panel"><div class="panel-h"><h2>Wall elevation</h2>${wallSeg()}</div><div class="panel-b"><div class="drawing">${elevSVG(plan, S.elevWall, 'builder')}</div></div></div>
   <div class="panel"><div class="panel-h"><h2>Backing schedule</h2></div><div class="panel-b tablewrap"><table><thead><tr><th>Tag</th><th>Item</th><th>Where</th><th>Spec</th><th>Location</th><th>Size</th></tr></thead><tbody>${backingRows}</tbody></table></div></div>
   <div class="grid2">
@@ -1044,6 +1175,7 @@ function render() {
     if (S.tab === 'sales') sheet.innerHTML = salesHTML(plan);
     if (S.tab === 'builder') sheet.innerHTML = builderHTML(plan);
     if (S.tab === 'installer') sheet.innerHTML = installerHTML(plan);
+    fillForm();
   } catch (error) {
     sheet.innerHTML = `<div class="panel"><div class="panel-b">The plan could not be drawn from these dimensions. Check width, depth, ceiling, and screen gaps.</div></div>`;
     console.error(error);
@@ -1305,8 +1437,102 @@ document.addEventListener('click', (event) => {
   if (action === 'resetpb') { S.pb = { ...DEFAULT_PB }; render(); toast('Defaults restored. Press Save price book to keep them.'); }
   if (action === 'export') exportJSON();
   if (action === 'import') $('#importFile').click();
+  if (action === 'reset-tags') {
+    delete S.job.spec.tags;
+    markDirty();
+    render();
+    toast('Tag positions reset');
+  }
   if (action && action.startsWith('dl-')) downloadSheet(action.slice(3));
 });
+
+function svgPoint(svg, clientX, clientY) {
+  const matrix = svg.getScreenCTM();
+  if (!matrix) return null;
+  const point = svg.createSVGPoint();
+  point.x = clientX;
+  point.y = clientY;
+  const local = point.matrixTransform(matrix.inverse());
+  return { x: local.x, y: local.y };
+}
+
+function clampNum(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function applyBuilderDrag(drag, x, y) {
+  const spec = S.job.spec;
+  const plan = compute(spec);
+  const inch = (value) => Math.round(value);
+  if (drag.kind === 'ball') {
+    const mat = matOf(spec.mat);
+    const next = clampNum(inch(y), plan.scr.y + mat.d / 2 + 6, plan.D - mat.d / 2 - 12);
+    spec.ballX = 0;
+    spec.teeDist = Math.round(next - plan.scr.y);
+  } else if (drag.kind === 'proj') {
+    const next = clampNum(inch(y), plan.scr.y + 18, plan.D - 14);
+    const width = Math.max(1, plan.img.w);
+    spec.tr = Math.round(((next - plan.scr.y) / width) * 100) / 100;
+    const preset = projOf(spec.proj).tr;
+    if (spec.proj !== 'custom' && Math.abs(spec.tr - preset) > 0.02) spec.proj = 'custom';
+  } else if (drag.kind === 'lm') {
+    const launch = lmOf(spec.lm);
+    const next = clampNum(inch(y), plan.scr.y + 18, plan.D - 12);
+    if (launch.type === 'overhead') spec.lmAdj = Math.round(next - plan.ball.y - (launch.offY || 0));
+    else spec.lmAdj = Math.round(next - plan.ball.y - 96);
+  } else if (drag.kind === 'cab') {
+    const cab = plan.cab;
+    if (cab.wall === 'rear') spec.compPos = Math.round(clampNum(x, cab.w / 2, plan.W - cab.w / 2) - cab.w / 2);
+    else spec.compPos = Math.round(plan.D - clampNum(y, plan.scr.y + cab.w / 2, plan.D - cab.w / 2) - cab.w / 2);
+  } else if (drag.kind === 'tv') {
+    const tv = plan.tvs[+drag.index];
+    if (!tv) return;
+    const along = tv.wall === 'rear' ? x : y;
+    if (!Array.isArray(spec.tvPos)) spec.tvPos = [];
+    spec.tvPos[+drag.index] = Math.round(clampNum(along, tv.w / 2, tv.wall === 'rear' ? plan.W - tv.w / 2 : plan.D - tv.w / 2));
+  } else if (drag.kind === 'mon' && plan.mon) {
+    const along = plan.mon.wall === 'rear' ? x : y;
+    spec.monAlong = Math.round(clampNum(along, 12, plan.mon.wall === 'rear' ? plan.W - 12 : plan.D - 12));
+  } else if (drag.kind === 'tag' && drag.id) {
+    if (!spec.tags) spec.tags = {};
+    spec.tags[drag.id] = {
+      x: Math.round(clampNum(x, -12, plan.W + 12)),
+      y: Math.round(clampNum(y, -12, plan.D + 12)),
+    };
+  } else return;
+  markDirty();
+  scheduleRender();
+}
+
+let planDrag = null;
+document.addEventListener('pointerdown', (event) => {
+  if (S.tab !== 'builder' || event.button != null && event.button !== 0) return;
+  const handle = event.target.closest && event.target.closest('[data-drag]');
+  if (!handle || !handle.closest('#sheet')) return;
+  event.preventDefault();
+  planDrag = {
+    kind: handle.dataset.drag,
+    id: handle.dataset.id || '',
+    index: handle.dataset.i || '0',
+    pointerId: event.pointerId,
+  };
+  document.body.classList.add('dragging');
+});
+document.addEventListener('pointermove', (event) => {
+  if (!planDrag || event.pointerId !== planDrag.pointerId) return;
+  const svg = document.querySelector('#sheet svg[aria-label="Plan view"]');
+  if (!svg) return;
+  const point = svgPoint(svg, event.clientX, event.clientY);
+  if (!point) return;
+  applyBuilderDrag(planDrag, point.x, point.y);
+});
+function endPlanDrag(event) {
+  if (!planDrag || event.pointerId !== planDrag.pointerId) return;
+  planDrag = null;
+  document.body.classList.remove('dragging');
+}
+document.addEventListener('pointerup', endPlanDrag);
+document.addEventListener('pointercancel', endPlanDrag);
 
 document.addEventListener('change', (event) => {
   const target = event.target;
