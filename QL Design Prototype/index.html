@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F2F5F2">
+<title>QuickLinks Golf · Sim Build Planner</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%231B6E43' width='32' height='32'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-size='14' font-family='Arial' fill='%23ffffff' font-weight='700'%3EQL%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script>
+try {
+  const saved = JSON.parse(localStorage.getItem("ql_sim_planner_v1") || "{}");
+  document.documentElement.setAttribute("data-theme", saved.theme || "light");
+} catch (e) {
+  document.documentElement.setAttribute("data-theme", "light");
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#sheet">Skip to content</a>
+<header class="bar">
+  <div class="wrap bar-in">
+    <div class="brand"><b>QuickLinks <i>Golf</i></b><span>Sim Build Planner</span></div>
+    <div class="jobpick">
+      <select id="jobSel" aria-label="Open a job"></select>
+      <button type="button" class="btn" id="newBtn">New job</button>
+      <button type="button" class="btn" id="dupBtn">Duplicate</button>
+      <button type="button" class="btn primary" id="saveBtn">Save job</button>
+      <button type="button" class="btn ghost" id="printBtn">Print</button>
+      <button type="button" class="btn ghost" id="themeBtn" aria-pressed="false">Dark</button>
+      <span class="savestate" id="saveState"></span>
+    </div>
+  </div>
+  <nav class="wrap tabs" role="tablist" aria-label="Planner sheets">
+    <button type="button" role="tab" data-tab="sales"><small>01</small>Sales Quote &amp; Visual</button>
+    <button type="button" role="tab" data-tab="builder"><small>02</small>Builder Rough-In CAD</button>
+    <button type="button" role="tab" data-tab="installer"><small>03</small>Installer Build Plan</button>
+    <button type="button" role="tab" data-tab="jobs">Jobs</button>
+    <button type="button" role="tab" data-tab="prices">Price Book</button>
+  </nav>
+</header>
+<main class="wrap">
+  <aside class="spec" id="spec" aria-label="Build specification"></aside>
+  <section class="sheet" id="sheet"></section>
+</main>
+<input id="importFile" type="file" accept="application/json,.json" hidden>
+<div class="toast" id="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
