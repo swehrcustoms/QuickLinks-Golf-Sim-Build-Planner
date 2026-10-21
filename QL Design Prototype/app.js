@@ -61,7 +61,7 @@ const DEFAULT_SPEC = {
   panelWalls: ['left', 'right', 'ceiling'], panelH: 96, panelRun: 168,
   lm: 'uneekor-xo2', lmAdj: 0, software: 'gspro',
   proj: 'st4k', tr: 0.81, projDrop: 8,
-  compWall: 'rear', compPos: 24, monitor: 'wall', tvCount: 1, tvWall: 'left', tvSize: 65, tvH: 66,
+  compWall: 'rear', compPos: 24, monitor: 'wall', monZ: 48, tvCount: 1, tvWall: 'left', tvSize: 65, tvH: 66,
   turf: 'full', mat: 'm55', matCutout: true, cups: 2,
 };
 
@@ -227,7 +227,7 @@ function compute(sp) {
   const HUSH = 24;
   const HUSH_GAP = 1.5;
   const run = Math.min(Math.max(0, +sp.panelRun || 0), Math.max(0, D - scr.y));
-  const panelHeight = Math.min(Math.max(0, +sp.panelH || 0), H);
+  const panelHeight = H;
   const hushSpans = (start, span) => {
     const tiles = [];
     if (span <= 1) return tiles;
@@ -259,7 +259,9 @@ function compute(sp) {
     hushSpans(alongStart, alongLen).forEach(([a0, a1]) => {
       hushSpans(0, panelHeight).forEach(([z0, z1]) => {
         const [ia0, ia1] = hushInset(a0, a1);
-        const [iz0, iz1] = hushInset(z0, z1);
+        const gap = Math.min(HUSH_GAP, (z1 - z0) * 0.22);
+        const iz0 = z0 <= 0.5 ? z0 : z0 + gap / 2;
+        const iz1 = panelHeight - z1 <= 0.5 ? z1 : z1 - gap / 2;
         panels.push({ wall, a0: ia0, a1: ia1, z0: iz0, z1: iz1 });
       });
     });
@@ -286,7 +288,8 @@ function compute(sp) {
   if (sp.monitor === 'wall') {
     const wall = handed === 'LH' ? 'left' : 'right';
     const along = sp.monAlong != null && sp.monAlong !== '' ? +sp.monAlong : ball.y - 6;
-    mon = { wall, a: Math.min(Math.max(along, scr.y + 12), D - 12), z: 48, w: 24, h: 14 };
+    const monZ = sp.monZ != null && sp.monZ !== '' ? +sp.monZ : 48;
+    mon = { wall, a: Math.min(Math.max(along, scr.y + 12), D - 12), z: monZ, w: 24, h: 14 };
   } else if (sp.monitor === 'cabinet') {
     mon = { wall: cab.wall, a: cab.a, z: cab.h + 10, w: 24, h: 14, onCab: true };
   }
@@ -500,9 +503,9 @@ function planSVG(plan, mode) {
       : '';
     return handle + callout(pos.x, pos.y, id, radius, color) + (mode === 'builder' ? `<circle class="s-hit" cx="${pos.x}" cy="${pos.y}" r="${radius * 1.7}"/></g>` : '');
   };
-  const dragOpen = (kind, label, extra = '') => (mode === 'builder' && kind ? `<g class="s-drag" data-drag="${kind}" ${extra} aria-label="${esc(label)}">` : '');
-  const dragClose = (kind) => (mode === 'builder' && kind ? '</g>' : '');
-  let markup = `<svg viewBox="${[-pad, -pad, W + pad * 2, D + pad * 2].join(' ')}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Plan view">`;
+  const dragOpen = (kind, label, extra = '') => (kind ? `<g class="s-drag" data-drag="${kind}" ${extra} aria-label="${esc(label)}">` : '');
+  const dragClose = (kind) => (kind ? '</g>' : '');
+  let markup = `<svg data-view="plan" viewBox="${[-pad, -pad, W + pad * 2, D + pad * 2].join(' ')}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Plan view">`;
   for (let x = 0; x <= W; x += 12) markup += `<line class="s-grid" x1="${x}" y1="0" x2="${x}" y2="${D}"/>`;
   for (let y = 0; y <= D; y += 12) markup += `<line class="s-grid" x1="0" y1="${y}" x2="${W}" y2="${y}"/>`;
   const turfLeft = S.job.spec.turf === 'full' ? 0 : plan.scr.x0;
@@ -525,15 +528,18 @@ function planSVG(plan, mode) {
   }
   plan.cups.forEach((cup) => { markup += `<circle class="s-cup" cx="${cup.x}" cy="${cup.y}" r="${mode === 'sales' ? 3 : 2.2}"/>`; });
   const mat = plan.mat;
-  if (mode === 'builder') markup += `<line class="s-center" x1="${centerX}" y1="${plan.scr.y}" x2="${centerX}" y2="${D}"/>`;
-  markup += dragOpen('ball', 'Hitting position. Stays centered on the screen. Drag toward or away from the screen.');
+  markup += `<line class="s-center" x1="${centerX}" y1="${plan.scr.y}" x2="${centerX}" y2="${D}"/>`;
+  markup += dragOpen('ball', 'Hitting mat. Drag to place the ball. Ball-to-screen and the center offset update.');
   markup += `<rect class="s-mat" x="${mat.x}" y="${mat.y}" width="${mat.w}" height="${mat.d}"/>`;
   if (S.job.spec.matCutout) markup += `<rect class="s-matcut" x="${mat.x - 1}" y="${mat.y - 1}" width="${mat.w + 2}" height="${mat.d + 2}"/>`;
   markup += `<rect class="s-strip" x="${plan.ball.x - 6}" y="${plan.ball.y - 10}" width="12" height="20"/>`;
   markup += `<circle class="s-ball" cx="${plan.ball.x}" cy="${plan.ball.y}" r="2"/>`;
-  if (mode === 'builder') markup += `<rect class="s-hit" x="${mat.x}" y="${mat.y}" width="${mat.w}" height="${mat.d}"/>`;
+  markup += `<rect class="s-hit" x="${mat.x}" y="${mat.y}" width="${mat.w}" height="${mat.d}"/>`;
   markup += dragClose('ball');
   markup += `<rect class="s-screen" x="${plan.scr.x0}" y="${plan.scr.y - 1.5}" width="${plan.scr.w}" height="3"/>`;
+  markup += dragOpen('screen', 'Screen. Drag toward or away from the ball. The screen offset and ball-to-screen update.');
+  markup += `<rect class="s-hit" x="${plan.scr.x0}" y="${plan.scr.y - 8}" width="${plan.scr.w}" height="16"/>`;
+  markup += dragClose('screen');
   if (mode !== 'builder') markup += `<polygon class="s-throw" points="${plan.pj.x},${plan.pj.y} ${plan.img.x0},${plan.scr.y} ${plan.img.x1},${plan.scr.y}"/>`;
   if (mode !== 'builder') {
     plan.golfers.forEach((golfer) => {
@@ -545,9 +551,9 @@ function planSVG(plan, mode) {
   if (cabinet.wall === 'rear') cabinetRect = { x: cabinet.a - cabinet.w / 2, y: D - cabinet.d, w: cabinet.w, h: cabinet.d };
   else if (cabinet.wall === 'left') cabinetRect = { x: 0, y: cabinet.a - cabinet.w / 2, w: cabinet.d, h: cabinet.w };
   else cabinetRect = { x: W - cabinet.d, y: cabinet.a - cabinet.w / 2, w: cabinet.d, h: cabinet.w };
-  markup += dragOpen('cab', 'Computer cabinet. Drag along its wall.');
+  markup += dragOpen('cab', 'Computer cabinet. Drag along its wall. The wall offset updates.');
   markup += `<rect class="s-equip" x="${cabinetRect.x}" y="${cabinetRect.y}" width="${cabinetRect.w}" height="${cabinetRect.h}"/>`;
-  if (mode === 'builder') markup += `<rect class="s-hit" x="${cabinetRect.x}" y="${cabinetRect.y}" width="${cabinetRect.w}" height="${cabinetRect.h}"/>`;
+  markup += `<rect class="s-hit" x="${cabinetRect.x}" y="${cabinetRect.y}" width="${cabinetRect.w}" height="${cabinetRect.h}"/>`;
   markup += dragClose('cab');
   const wallRect = (wall, along, width, thickness) => {
     if (wall === 'left') return { x: 0, y: along - width / 2, w: thickness, h: width };
@@ -557,27 +563,27 @@ function planSVG(plan, mode) {
   };
   plan.tvs.forEach((tv, index) => {
     const rect = wallRect(tv.wall, tv.a, tv.w, 5);
-    markup += dragOpen('tv', `TV ${index + 1}. Drag along the wall.`, `data-i="${index}"`);
+    markup += dragOpen('tv', `TV ${index + 1}. Drag along the wall. Its position updates.`, `data-i="${index}"`);
     markup += `<rect class="s-tv" x="${rect.x}" y="${rect.y}" width="${rect.w}" height="${rect.h}"/>`;
-    if (mode === 'builder') markup += `<rect class="s-hit" x="${rect.x - 4}" y="${rect.y - 4}" width="${rect.w + 8}" height="${rect.h + 8}"/>`;
+    markup += `<rect class="s-hit" x="${rect.x - 4}" y="${rect.y - 4}" width="${rect.w + 8}" height="${rect.h + 8}"/>`;
     markup += dragClose('tv');
   });
   if (plan.mon && !plan.mon.onCab) {
     const rect = wallRect(plan.mon.wall, plan.mon.a, plan.mon.w, 4);
-    markup += dragOpen('mon', 'Monitor. Drag along the wall.');
+    markup += dragOpen('mon', 'Monitor. Drag along the wall. Its position updates.');
     markup += `<rect class="s-tv" x="${rect.x}" y="${rect.y}" width="${rect.w}" height="${rect.h}"/>`;
-    if (mode === 'builder') markup += `<rect class="s-hit" x="${rect.x - 4}" y="${rect.y - 4}" width="${rect.w + 8}" height="${rect.h + 8}"/>`;
+    markup += `<rect class="s-hit" x="${rect.x - 4}" y="${rect.y - 4}" width="${rect.w + 8}" height="${rect.h + 8}"/>`;
     markup += dragClose('mon');
   }
   const launch = plan.lm;
   const launchOnCenter = launch.mount === 'ceiling' || launch.type === 'radar';
-  markup += dragOpen(launchOnCenter ? 'lm' : '', launchOnCenter ? 'Launch monitor. Stays centered on the screen. Drag toward or away from the screen.' : '');
+  markup += dragOpen(launchOnCenter ? 'lm' : '', launchOnCenter ? 'Launch monitor. Stays on the target line with the ball. Drag toward or away from the screen.' : '');
   markup += `<rect class="${launch.mount === 'ceiling' ? 's-equip' : 's-equipfill'}" x="${launch.x - launch.w / 2}" y="${launch.y - launch.d / 2}" width="${launch.w}" height="${launch.d}" ${launch.mount === 'ceiling' ? 'stroke-dasharray="3 2"' : ''}/>`;
-  if (mode === 'builder' && launchOnCenter) markup += `<rect class="s-hit" x="${launch.x - launch.w / 2 - 4}" y="${launch.y - launch.d / 2 - 4}" width="${launch.w + 8}" height="${launch.d + 8}"/>`;
+  if (launchOnCenter) markup += `<rect class="s-hit" x="${launch.x - launch.w / 2 - 4}" y="${launch.y - launch.d / 2 - 4}" width="${launch.w + 8}" height="${launch.d + 8}"/>`;
   markup += dragClose(launchOnCenter ? 'lm' : '');
-  markup += dragOpen('proj', 'Projector. Stays centered on the screen. Drag toward or away from the screen.');
+  markup += dragOpen('proj', 'Projector. Stays centered on the screen. Drag toward or away from the screen to set the throw.');
   markup += `<rect class="s-equip" x="${plan.pj.x - 10}" y="${plan.pj.y - 8}" width="20" height="16" stroke-dasharray="3 2"/><circle class="s-equipfill" cx="${plan.pj.x}" cy="${plan.pj.y - 8}" r="3"/>`;
-  if (mode === 'builder') markup += `<rect class="s-hit" x="${plan.pj.x - 14}" y="${plan.pj.y - 12}" width="28" height="24"/>`;
+  markup += `<rect class="s-hit" x="${plan.pj.x - 14}" y="${plan.pj.y - 12}" width="28" height="24"/>`;
   markup += dragClose('proj');
   if (mode === 'builder') {
     plan.backing.forEach((item) => {
@@ -635,7 +641,7 @@ function elevSVG(plan, wall, mode) {
   const Z = (z) => H - z;
   const pad = Math.max(len, H) * 0.14;
   const fs = Math.max(len, H) / 38;
-  let markup = `<svg viewBox="${-pad} ${-pad} ${len + pad * 2} ${H + pad * 2}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(wall)} wall elevation">`;
+  let markup = `<svg data-view="elev" data-wall="${wall}" viewBox="${-pad} ${-pad} ${len + pad * 2} ${H + pad * 2}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(wall)} wall elevation">`;
   for (let x = 0; x <= len; x += 16) markup += `<line class="s-stud" x1="${x}" y1="0" x2="${x}" y2="${H}"/>`;
   if (wall === 'left' || wall === 'right') {
     const screenX = U(plan.scr.y);
@@ -729,6 +735,27 @@ function elevSVG(plan, wall, mode) {
       markup += `<line class="s-tube" x1="${x}" y1="${Z(tv.z)}" x2="${x}" y2="0"/>`;
     });
   }
+  const elevHit = (kind, label, rx, ry, rw, rh, extra = '') => {
+    markup += `<g class="s-drag" data-drag="${kind}" ${extra} aria-label="${esc(label)}"><rect class="s-hit" x="${rx}" y="${ry}" width="${Math.max(8, rw)}" height="${Math.max(8, rh)}"/></g>`;
+  };
+  if (wall === 'left' || wall === 'right') {
+    elevHit('ball', 'Ball. Drag toward or away from the screen. Ball-to-screen updates.', U(plan.ball.y) - 12, H - 18, 24, 18);
+    elevHit('proj', 'Projector. Drag to set the throw and the mount drop.', U(plan.pj.y) - 14, Z(plan.pj.z) - 2, 28, 14);
+    if (plan.lm.mount === 'ceiling' || plan.lm.type === 'radar') elevHit('lm', 'Launch monitor. Drag toward or away from the screen.', U(plan.lm.y) - 10, Z(plan.lm.z) - 2, 20, 12);
+  }
+  if (plan.cab.wall === wall) {
+    const cabX = U(plan.cab.a);
+    elevHit('cab', 'Computer cabinet. Drag along the wall. The wall offset updates.', cabX - plan.cab.w / 2, Z(plan.cab.h), plan.cab.w, plan.cab.h);
+  }
+  plan.tvs.forEach((tv, index) => {
+    if (tv.wall !== wall) return;
+    const tvX = U(tv.a);
+    elevHit('tv', `TV ${index + 1}. Drag along the wall or up and down. Position and height update.`, tvX - tv.w / 2, Z(tv.z + tv.h / 2), tv.w, tv.h, `data-i="${index}"`);
+  });
+  if (plan.mon && !plan.mon.onCab && plan.mon.wall === wall) {
+    const monX = U(plan.mon.a);
+    elevHit('mon', 'Monitor. Drag along the wall or up and down. Position and height update.', monX - plan.mon.w / 2, Z(plan.mon.z + plan.mon.h / 2), plan.mon.w, plan.mon.h);
+  }
   markup += `<line class="s-wall" x1="0" y1="${H}" x2="${len}" y2="${H}"/><rect class="s-wallthin" x="0" y="0" width="${len}" height="${H}"/>`;
   markup += dimH(0, len, -pad * 0.35, ftin(len), fs);
   markup += dimV(0, H, len + pad * 0.35, ftin(H) + ' clg', fs);
@@ -757,7 +784,7 @@ function perspectiveSVG(plan) {
   const minY = Math.min(...ys);
   const maxY = Math.max(...ys);
   const pad = (maxX - minX) * 0.04;
-  let markup = `<svg viewBox="${minX - pad} ${minY - pad} ${maxX - minX + pad * 2} ${maxY - minY + pad * 2}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Rendered view of the simulator bay"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--sky1)"/><stop offset="1" stop-color="var(--sky2)"/></linearGradient><pattern id="turfp" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" class="s-floor"/><path d="M0 6 L3 0" class="s-stud" style="stroke:var(--turf2);opacity:.5"/></pattern></defs>`;
+  let markup = `<svg data-view="persp" data-camx="${camX}" data-camy="${camY}" data-camz="${camZ}" viewBox="${minX - pad} ${minY - pad} ${maxX - minX + pad * 2} ${maxY - minY + pad * 2}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Rendered view of the simulator bay"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--sky1)"/><stop offset="1" stop-color="var(--sky2)"/></linearGradient><pattern id="turfp" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" class="s-floor"/><path d="M0 6 L3 0" class="s-stud" style="stroke:var(--turf2);opacity:.5"/></pattern></defs>`;
   markup += poly([[0, 0, H], [W, 0, H], [W, D, H], [0, D, H]], 's-ceil');
   plan.panels.filter((panel) => panel.wall === 'ceiling').forEach((panel) => {
     markup += poly([[panel.x0, panel.y0, H - 0.4], [panel.x1, panel.y0, H - 0.4], [panel.x1, panel.y1, H - 0.4], [panel.x0, panel.y1, H - 0.4]], 's-hush', 'style="stroke-width:2.4"');
@@ -827,6 +854,45 @@ function perspectiveSVG(plan) {
   }
   const [ballX, ballY] = project(plan.ball.x, plan.ball.y, 1);
   markup += `<circle class="s-ball" cx="${ballX}" cy="${ballY}" r="${Math.max(1.5, (project(plan.ball.x + 1, plan.ball.y, 1)[0] - ballX) * 1.6)}"/>`;
+  const hitPoly = (points) => `<polygon class="s-hit" points="${points.map((point) => project(...point).map((value) => value.toFixed(1)).join(',')).join(' ')}"/>`;
+  const openHit = (kind, label, extra = '') => `<g class="s-drag" data-drag="${kind}" ${extra} aria-label="${esc(label)}">`;
+  markup += openHit('ball', 'Hitting mat. Drag to place the ball. Ball-to-screen and the center offset update.', 'data-plane="floor"');
+  markup += hitPoly([[mat.x, mat.y, 0.5], [mat.x + mat.w, mat.y, 0.5], [mat.x + mat.w, mat.y + mat.d, 0.5], [mat.x, mat.y + mat.d, 0.5]]);
+  markup += '</g>';
+  markup += openHit('ball', 'Ball. Drag to place it. Ball-to-screen and the center offset update.', 'data-plane="floor"');
+  markup += `<circle class="s-hit" cx="${ballX}" cy="${ballY}" r="22"/>`;
+  markup += '</g>';
+  if (launch.mount === 'ceiling') {
+    markup += openHit('lm', 'Launch monitor. Drag toward or away from the screen. It stays on the target line.', `data-plane="level" data-zval="${launch.z}"`);
+    markup += hitPoly([[launch.x - 7, launch.y - 5, launch.z], [launch.x + 7, launch.y - 5, launch.z], [launch.x + 7, launch.y + 5, launch.z], [launch.x - 7, launch.y + 5, launch.z]]);
+    markup += '</g>';
+  }
+  if (projector.y < camY - 20) {
+    markup += openHit('proj', 'Projector. Drag toward or away from the screen to set the throw. It stays centered on the screen.', `data-plane="level" data-zval="${projector.z - 7}"`);
+    markup += hitPoly([[projector.x - 10, projector.y - 8, projector.z - 7], [projector.x + 10, projector.y - 8, projector.z - 7], [projector.x + 10, projector.y + 8, projector.z - 7], [projector.x - 10, projector.y + 8, projector.z - 7]]);
+    markup += '</g>';
+  }
+  if (cabinet.wall === 'left' || cabinet.wall === 'right') {
+    const face = cabinet.wall === 'left' ? cabinet.d : W - cabinet.d;
+    const y0 = cabinet.a - cabinet.w / 2;
+    const y1 = cabinet.a + cabinet.w / 2;
+    markup += openHit('cab', 'Computer cabinet. Drag along the wall. The wall offset updates.', `data-plane="x" data-xval="${face}"`);
+    markup += hitPoly([[face, y0, 0], [face, y1, 0], [face, y1, cabinet.h], [face, y0, cabinet.h]]);
+    markup += '</g>';
+  }
+  plan.tvs.forEach((tv, index) => {
+    if (tv.wall !== 'left' && tv.wall !== 'right') return;
+    const x = tv.wall === 'left' ? 1 : W - 1;
+    markup += openHit('tv', `TV ${index + 1}. Drag along the wall or up and down. Position and height update.`, `data-i="${index}" data-plane="x" data-xval="${tv.wall === 'left' ? 0 : W}"`);
+    markup += hitPoly([[x, tv.a - tv.w / 2, tv.z - tv.h / 2], [x, tv.a + tv.w / 2, tv.z - tv.h / 2], [x, tv.a + tv.w / 2, tv.z + tv.h / 2], [x, tv.a - tv.w / 2, tv.z + tv.h / 2]]);
+    markup += '</g>';
+  });
+  if (plan.mon && !plan.mon.onCab && (plan.mon.wall === 'left' || plan.mon.wall === 'right')) {
+    const x = plan.mon.wall === 'left' ? 1 : W - 1;
+    markup += openHit('mon', 'Monitor. Drag along the wall or up and down. Position and height update.', `data-plane="x" data-xval="${plan.mon.wall === 'left' ? 0 : W}"`);
+    markup += hitPoly([[x, plan.mon.a - plan.mon.w / 2, plan.mon.z - plan.mon.h / 2], [x, plan.mon.a + plan.mon.w / 2, plan.mon.z - plan.mon.h / 2], [x, plan.mon.a + plan.mon.w / 2, plan.mon.z + plan.mon.h / 2], [x, plan.mon.a - plan.mon.w / 2, plan.mon.z + plan.mon.h / 2]]);
+    markup += '</g>';
+  }
   return markup + '</svg>';
 }
 
@@ -873,7 +939,7 @@ function steps(plan) {
     ['verify', 'Verify rough-in against the builder sheet', 'Backing, receptacles, Cat6, and tech tubes are in place. Photograph each before panels go up.'],
     ['layout', 'Snap layout lines', 'Screen line, target line, ball center, mat outline, projector, and launch-monitor points from the schedule.'],
   ];
-  if (plan.panels.length) list.push(['panels', 'Install HUSH panels', `${plan.panels.length} nominal 2×2 ft panels. Walls from the floor up. Ceiling from the screen line back ${ftin(plan.run)}, leaving the gap so each panel stays separate.`]);
+  if (plan.panels.length) list.push(['panels', 'Install HUSH panels', `${plan.panels.length} nominal 2×2 ft panels. Side and rear walls run from the floor to the ceiling. Ceiling tiles start at the screen line and run back ${ftin(plan.run)}, with a gap so each panel stays separate.`]);
   list.push(['screen', 'Hang the screen frame and impact screen', 'Fasten to B1–B3 backing. Tension evenly. Check the projected area for wrinkles.']);
   list.push(['turf', 'Lay turf' + (spec.matCutout ? ' and cut the mat inset' : ''), spec.matCutout ? 'Cut the inset to mat size plus 1/8 in. Mat surface sits flush with the turf.' : 'Keep seams away from the hitting area.']);
   if (plan.cups.length) list.push(['cups', 'Cut and set putting cups', `${plan.cups.length} cups per the schedule.`]);
@@ -911,7 +977,6 @@ const FORM = [
     ['s.topGap', 'Gap at ceiling (in)', 'number'],
     ['s.floorGap', 'Screen bottom above floor (in)', 'number'],
     ['s.aspect', 'Image aspect', 'select', { opts: ['16:9', '16:10', '4:3'] }],
-    ['s.panelH', 'Wall panel height (in)', 'number'],
     ['s.panelWalls', 'HUSH surfaces', 'checks', { opts: ['left', 'right', 'rear', 'ceiling'], full: 1 }],
     ['s.panelRun', 'Coverage from screen (in)', 'number', { full: 1, hint: 1 }],
   ]],
@@ -929,6 +994,7 @@ const FORM = [
     ['s.compWall', 'Computer wall', 'select', { opts: [['rear', 'Rear'], ['left', 'Left'], ['right', 'Right']] }],
     ['s.compPos', 'Offset on wall (in)', 'number'],
     ['s.monitor', 'Monitor', 'select', { opts: [['wall', 'Wall arm at hitting area'], ['cabinet', 'On computer cabinet'], ['none', 'None']], full: 1 }],
+    ['s.monZ', 'Monitor center above floor (in)', 'number'],
     ['s.tvCount', 'TVs', 'select', { opts: [['0', '0'], ['1', '1'], ['2', '2'], ['3', '3']] }],
     ['s.tvWall', 'TV wall', 'select', { opts: [['left', 'Left'], ['right', 'Right'], ['rear', 'Rear']] }],
     ['s.tvSize', 'TV size (in)', 'number'],
@@ -1087,10 +1153,11 @@ function salesHTML(plan) {
     <div class="stat"><div class="k">Image</div><div class="v">${ftin(plan.img.w)} × ${ftin(plan.img.h)}</div></div>
     <div class="stat"><div class="k">Estimate</div><div class="v">${money(priced.total)}</div></div>
   </div>
-  <div class="panel"><div class="panel-h"><h2>Client visual</h2><span class="savestate">View from behind the hitting area · ${esc(plan.lm.name)} · ${esc(plan.pj.name.split(' (')[0])} · ${plan.panels.length} HUSH 2×2 panels</span></div><div class="panel-b"><div class="drawing">${perspectiveSVG(plan)}</div></div></div>
+  <div class="panel"><div class="panel-h"><h2>Client visual</h2><span class="savestate">View from behind the hitting area · ${esc(plan.lm.name)} · ${esc(plan.pj.name.split(' (')[0])} · ${plan.panels.length} HUSH 2×2 panels</span></div><div class="panel-b"><div class="drawing">${perspectiveSVG(plan)}</div><p class="savestate" style="margin-top:8px">Drag the mat, projector, launch monitor, TV, monitor, or computer. The matching dimension updates.</p></div></div>
   <div class="grid2">
     <div class="panel"><div class="panel-h"><h2>Floor plan</h2></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'sales')}</div>
-      <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:#2c312f"></i>HUSH panel</span><span><i class="sw" style="background:var(--turf);opacity:.5"></i>Turf</span><span><i class="sw" style="background:var(--green)"></i>Putting green</span><span><i class="sw" style="border:1px dashed var(--warn)"></i>Swing radius</span><span><i class="sw" style="background:var(--cad);opacity:.25"></i>Projector throw</span></div></div></div>
+      <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:#2c312f"></i>HUSH panel</span><span><i class="sw" style="background:var(--turf);opacity:.5"></i>Turf</span><span><i class="sw" style="background:var(--green)"></i>Putting green</span><span><i class="sw" style="border:1px dashed var(--warn)"></i>Swing radius</span><span><i class="sw" style="background:var(--cad);opacity:.25"></i>Projector throw</span></div>
+      <p class="savestate" style="margin-top:8px">Drag the mat, screen, projector, launch monitor, TV, monitor, or computer. Ball-to-screen, center offset, throw, and wall positions update.</p></div></div>
     <div class="panel"><div class="panel-h"><h2>Space check</h2>${fitPill(plan.fit)}</div><div class="panel-b">${checksHTML(plan)}<p class="savestate" style="margin-top:10px">Clearances are planning rules of thumb. Confirm with a swing test and the manufacturer's install specs before ordering.</p></div></div>
   </div>
   <div class="panel"><div class="panel-h"><h2>Quote</h2><div class="actions"><div class="seg" role="group" aria-label="Quote view"><button type="button" data-act="cv" data-v="0" aria-pressed="${!client}">Internal</button><button type="button" data-act="cv" data-v="1" aria-pressed="${client}">Client</button></div><button type="button" class="btn" data-act="copyquote">Copy quote</button><button type="button" class="btn" data-act="dl-sales">Download proposal</button></div></div>
@@ -1107,8 +1174,8 @@ function builderHTML(plan) {
   return `<div class="sheet-head"><div><h1>Builder Rough-In CAD</h1><p>For the home builder, remodeler, or the homeowner's trades: backing, receptacles, low-voltage, and 2 in tech tubes before drywall. X is from the left wall facing the screen. Y is from the screen wall.</p></div>${titleBlock()}</div>
   <div class="panel"><div class="panel-h"><h2>Reflected ceiling + floor plan</h2><div class="actions"><button type="button" class="btn" data-act="reset-tags">Reset tags</button><button type="button" class="btn" data-act="dl-builder">Download builder sheet</button></div></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'builder')}</div>
     <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:#2c312f"></i>HUSH 2×2</span><span><i class="sw" style="border-top:2px dashed var(--cad);height:0"></i>Screen centerline</span><span><i class="sw" style="background:var(--backing);opacity:.5"></i>Backing / blocking</span><span><svg width="14" height="14" viewBox="-7 -7 14 14">${elecSym(0, 0, 5.5, 'ceiling')}</svg>Receptacle</span><span><svg width="14" height="14" viewBox="-7 -7 14 14">${elecSym(0, 0, 5.5, 'floor')}</svg>Floor box</span><span><svg width="14" height="14" viewBox="-7 -7 14 14"><polygon class="s-data" points="0,-5 5,4 -5,4"/></svg>Cat6</span><span><i class="sw" style="border-top:2px dashed var(--tube);height:0"></i>2 in tech tube</span><span><i class="sw" style="border:1px dashed var(--bad)"></i>No-fixture ring</span></div>
-    <p class="savestate" style="margin-top:8px">Drag the hitting mat, projector, and overhead launch monitor along the dashed centerline. They stay centered on the screen. Drag a TV, monitor, or computer along its wall. Drag a tag if it covers another mark.</p></div></div>
-  <div class="panel"><div class="panel-h"><h2>Wall elevation</h2>${wallSeg()}</div><div class="panel-b"><div class="drawing">${elevSVG(plan, S.elevWall, 'builder')}</div></div></div>
+    <p class="savestate" style="margin-top:8px">Drag the mat to place the ball. Ball-to-screen and the center offset update. The projector and overhead launch monitor stay on the target line; drag them toward or away from the screen. Drag a TV, monitor, or computer along its wall. On an elevation, drag up or down to set the height. Drag a tag if it covers another mark.</p></div></div>
+  <div class="panel"><div class="panel-h"><h2>Wall elevation</h2>${wallSeg()}</div><div class="panel-b"><div class="drawing">${elevSVG(plan, S.elevWall, 'builder')}</div><p class="savestate" style="margin-top:8px">Drag an item along the wall or up and down. Position and height update in the specification.</p></div></div>
   <div class="panel"><div class="panel-h"><h2>Backing schedule</h2></div><div class="panel-b tablewrap"><table><thead><tr><th>Tag</th><th>Item</th><th>Where</th><th>Spec</th><th>Location</th><th>Size</th></tr></thead><tbody>${backingRows}</tbody></table></div></div>
   <div class="grid2">
     <div class="panel"><div class="panel-h"><h2>Electrical + low voltage</h2></div><div class="panel-b tablewrap"><table><thead><tr><th>Tag</th><th>Item</th><th>Spec</th><th>Location</th><th>Height</th></tr></thead><tbody>${powerRows}</tbody></table></div></div>
@@ -1131,10 +1198,10 @@ function installerHTML(plan) {
   const done = sequence.filter((step) => checks[step[0]]).length;
   const rows = places.map((place, index) => `<tr><td class="m">${index + 1}</td><td>${esc(place.item)}</td><td class="m">${place.x == null ? '—' : ftin(place.x)}</td><td class="m">${ftin(place.y)}</td><td class="m">${typeof place.z === 'number' ? ftin(place.z) : esc(place.z)}</td><td>${esc(place.mount)}</td><td>${esc(place.notes)}</td></tr>`).join('');
   return `<div class="sheet-head"><div><h1>Installer Build Plan</h1><p>Placement for the crew. X is measured from the left wall facing the screen. Y is from the screen wall. Numbers on the plan match the schedule.</p></div>${titleBlock()}</div>
-  <div class="panel"><div class="panel-h"><h2>Placement plan</h2><button type="button" class="btn" data-act="dl-installer">Download installer sheet</button></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'installer')}</div></div></div>
+  <div class="panel"><div class="panel-h"><h2>Placement plan</h2><button type="button" class="btn" data-act="dl-installer">Download installer sheet</button></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'installer')}</div><p class="savestate" style="margin-top:8px">Drag an item to place it. The schedule dimensions update with the move.</p></div></div>
   <div class="panel"><div class="panel-h"><h2>Placement schedule</h2></div><div class="panel-b tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>X (left wall)</th><th>Y (back wall)</th><th>Height</th><th>Mount</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table></div></div>
   <div class="grid2">
-    <div class="panel"><div class="panel-h"><h2>Wall elevation</h2>${wallSeg()}</div><div class="panel-b"><div class="drawing">${elevSVG(plan, S.elevWall, 'installer')}</div></div></div>
+    <div class="panel"><div class="panel-h"><h2>Wall elevation</h2>${wallSeg()}</div><div class="panel-b"><div class="drawing">${elevSVG(plan, S.elevWall, 'installer')}</div><p class="savestate" style="margin-top:8px">Drag an item along the wall or up and down. Position and height update in the schedule.</p></div></div>
     <div class="panel"><div class="panel-h"><h2>Install sequence</h2><div style="display:flex;align-items:center;gap:8px"><span class="savestate">${done}/${sequence.length}</span><div class="progress"><i style="width:${sequence.length ? done / sequence.length * 100 : 0}%"></i></div></div></div><div class="panel-b">
       <ol class="steps">${sequence.map(([key, title, detail]) => `<li class="${checks[key] ? 'done' : ''}"><input type="checkbox" id="st_${key}" data-act="step" data-v="${key}" ${checks[key] ? 'checked' : ''} aria-label="${esc(title)}"><label for="st_${key}"><b>${esc(title)}</b><small>${esc(detail)}</small></label></li>`).join('')}</ol>
       ${S.currentId ? '' : '<p class="savestate">Save the job to keep checklist progress.</p>'}</div></div>
@@ -1460,21 +1527,83 @@ function clampNum(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-function applyBuilderDrag(drag, x, y) {
+function elevRoom(wall, sx, sy, plan) {
+  const { W, D, H } = plan;
+  let along;
+  if (wall === 'screen') along = sx;
+  else if (wall === 'rear') along = W - sx;
+  else if (wall === 'left') along = D - sx;
+  else along = sx;
+  const z = H - sy;
+  const x = (wall === 'rear' || wall === 'screen') ? along : (wall === 'left' ? 0 : W);
+  const y = (wall === 'left' || wall === 'right') ? along : (wall === 'rear' ? D : plan.scr.y);
+  return { x, y, z, along };
+}
+
+function perspRoom(drag, point, svg) {
+  const camX = +svg.dataset.camx;
+  const camY = +svg.dataset.camy;
+  const camZ = +svg.dataset.camz;
+  const sx = point.x;
+  const sy = point.y;
+  let depth;
+  if (drag.plane === 'floor' || drag.plane === 'level') {
+    const zPlane = drag.plane === 'floor' ? 0 : +drag.zval;
+    if (Math.abs(sy) < 1) return null;
+    depth = (camZ - zPlane) * 1000 / sy;
+  } else if (drag.plane === 'x') {
+    if (Math.abs(sx) < 1) return null;
+    depth = (+drag.xval - camX) * 1000 / sx;
+  } else if (drag.plane === 'y') {
+    depth = camY - +drag.yval;
+  } else return null;
+  if (!(depth > 8)) return null;
+  return {
+    x: camX + sx * depth / 1000,
+    y: camY - depth,
+    z: camZ - sy * depth / 1000,
+  };
+}
+
+function applyDrag(drag, point, svg) {
   const spec = S.job.spec;
   const plan = compute(spec);
   const inch = (value) => Math.round(value);
+  let x = point.x;
+  let y = point.y;
+  let z = null;
+  if (drag.view === 'elev') {
+    const mapped = elevRoom(drag.wall, point.x, point.y, plan);
+    x = mapped.x;
+    y = mapped.y;
+    z = mapped.z;
+  } else if (drag.view === 'persp') {
+    const mapped = perspRoom(drag, point, svg);
+    if (!mapped) return;
+    x = mapped.x;
+    y = mapped.y;
+    z = mapped.z;
+  }
   if (drag.kind === 'ball') {
     const mat = matOf(spec.mat);
-    const next = clampNum(inch(y), plan.scr.y + mat.d / 2 + 6, plan.D - mat.d / 2 - 12);
-    spec.ballX = 0;
-    spec.teeDist = Math.round(next - plan.scr.y);
+    const nextY = clampNum(inch(y), plan.scr.y + mat.d / 2 + 6, plan.D - mat.d / 2 - 12);
+    spec.teeDist = Math.round(nextY - plan.scr.y);
+    if (drag.view !== 'elev') {
+      const nextX = clampNum(inch(x), mat.w / 2 + 6, plan.W - mat.w / 2 - 6);
+      spec.ballX = Math.round(nextX - plan.W / 2);
+    }
+  } else if (drag.kind === 'screen' && drag.view === 'plan') {
+    const ballAbs = plan.ball.y;
+    const next = clampNum(inch(y), 0, Math.max(0, ballAbs - 48));
+    spec.screenOffset = Math.round(next);
+    spec.teeDist = Math.round(ballAbs - next);
   } else if (drag.kind === 'proj') {
     const next = clampNum(inch(y), plan.scr.y + 18, plan.D - 14);
     const width = Math.max(1, plan.img.w);
     spec.tr = Math.round(((next - plan.scr.y) / width) * 100) / 100;
     const preset = projOf(spec.proj).tr;
     if (spec.proj !== 'custom' && Math.abs(spec.tr - preset) > 0.02) spec.proj = 'custom';
+    if (z != null && drag.plane !== 'level' && drag.plane !== 'floor') spec.projDrop = Math.round(clampNum(plan.H - z, 0, Math.max(0, plan.H - 36)));
   } else if (drag.kind === 'lm') {
     const launch = lmOf(spec.lm);
     const next = clampNum(inch(y), plan.scr.y + 18, plan.D - 12);
@@ -1482,18 +1611,21 @@ function applyBuilderDrag(drag, x, y) {
     else spec.lmAdj = Math.round(next - plan.ball.y - 96);
   } else if (drag.kind === 'cab') {
     const cab = plan.cab;
-    if (cab.wall === 'rear') spec.compPos = Math.round(clampNum(x, cab.w / 2, plan.W - cab.w / 2) - cab.w / 2);
-    else spec.compPos = Math.round(plan.D - clampNum(y, plan.scr.y + cab.w / 2, plan.D - cab.w / 2) - cab.w / 2);
+    const along = (drag.view === 'elev' && (drag.wall === 'rear' || drag.wall === 'screen')) || (drag.view !== 'elev' && cab.wall === 'rear') ? x : y;
+    if (cab.wall === 'rear') spec.compPos = Math.round(clampNum(along, cab.w / 2, plan.W - cab.w / 2) - cab.w / 2);
+    else spec.compPos = Math.round(plan.D - clampNum(along, plan.scr.y + cab.w / 2, plan.D - cab.w / 2) - cab.w / 2);
   } else if (drag.kind === 'tv') {
     const tv = plan.tvs[+drag.index];
     if (!tv) return;
-    const along = tv.wall === 'rear' ? x : y;
+    const along = tv.wall === 'rear' || tv.wall === 'screen' ? x : y;
     if (!Array.isArray(spec.tvPos)) spec.tvPos = [];
     spec.tvPos[+drag.index] = Math.round(clampNum(along, tv.w / 2, tv.wall === 'rear' ? plan.W - tv.w / 2 : plan.D - tv.w / 2));
+    if (z != null) spec.tvH = Math.round(clampNum(z, tv.h / 2 + 6, plan.H - tv.h / 2 - 6));
   } else if (drag.kind === 'mon' && plan.mon) {
     const along = plan.mon.wall === 'rear' ? x : y;
     spec.monAlong = Math.round(clampNum(along, 12, plan.mon.wall === 'rear' ? plan.W - 12 : plan.D - 12));
-  } else if (drag.kind === 'tag' && drag.id) {
+    if (z != null) spec.monZ = Math.round(clampNum(z, plan.mon.h / 2 + 6, plan.H - plan.mon.h / 2 - 6));
+  } else if (drag.kind === 'tag' && drag.id && drag.view === 'plan') {
     if (!spec.tags) spec.tags = {};
     spec.tags[drag.id] = {
       x: Math.round(clampNum(x, -12, plan.W + 12)),
@@ -1505,26 +1637,39 @@ function applyBuilderDrag(drag, x, y) {
 }
 
 let planDrag = null;
+function dragSvg(drag) {
+  if (drag.view === 'persp') return document.querySelector('#sheet svg[data-view="persp"]');
+  if (drag.view === 'elev') return document.querySelector(`#sheet svg[data-view="elev"][data-wall="${drag.wall}"]`);
+  return document.querySelector('#sheet svg[data-view="plan"]');
+}
 document.addEventListener('pointerdown', (event) => {
-  if (S.tab !== 'builder' || event.button != null && event.button !== 0) return;
+  if (!['sales', 'builder', 'installer'].includes(S.tab) || event.button != null && event.button !== 0) return;
   const handle = event.target.closest && event.target.closest('[data-drag]');
   if (!handle || !handle.closest('#sheet')) return;
+  const svg = handle.closest('svg');
+  if (!svg) return;
   event.preventDefault();
   planDrag = {
     kind: handle.dataset.drag,
     id: handle.dataset.id || '',
     index: handle.dataset.i || '0',
     pointerId: event.pointerId,
+    view: svg.dataset.view || 'plan',
+    wall: svg.dataset.wall || '',
+    plane: handle.dataset.plane || '',
+    zval: handle.dataset.zval || '',
+    xval: handle.dataset.xval || '',
+    yval: handle.dataset.yval || '',
   };
   document.body.classList.add('dragging');
 });
 document.addEventListener('pointermove', (event) => {
   if (!planDrag || event.pointerId !== planDrag.pointerId) return;
-  const svg = document.querySelector('#sheet svg[aria-label="Plan view"]');
+  const svg = dragSvg(planDrag);
   if (!svg) return;
   const point = svgPoint(svg, event.clientX, event.clientY);
   if (!point) return;
-  applyBuilderDrag(planDrag, point.x, point.y);
+  applyDrag(planDrag, point, svg);
 });
 function endPlanDrag(event) {
   if (!planDrag || event.pointerId !== planDrag.pointerId) return;
