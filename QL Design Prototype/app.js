@@ -477,6 +477,160 @@ function dimV(y1, y2, x, label, fs) {
   return `<line class="s-dim" x1="${x}" y1="${y1}" x2="${x}" y2="${y2}"/><line class="s-dim" x1="${x - tick}" y1="${y1}" x2="${x + tick}" y2="${y1}"/><line class="s-dim" x1="${x - tick}" y1="${y2}" x2="${x + tick}" y2="${y2}"/><text class="s-dimtxt" x="${x - tick * 0.8}" y="${mid}" text-anchor="middle" font-size="${fs * 0.85}" transform="rotate(-90 ${x - tick * 0.8} ${mid})" style="paint-order:stroke;stroke:var(--surface);stroke-width:${fs * 0.3}">${esc(label)}</text>`;
 }
 
+function refNum(value) { return Math.round(value * 10) / 10; }
+
+function refSeg(x1, y1, x2, y2, label, fs, t = 0.5) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  if (!(len > Math.max(8, fs * 0.45))) return '';
+  const tick = Math.max(3, fs * 0.28);
+  const nx = -dy / len;
+  const ny = dx / len;
+  const at = Math.min(0.82, Math.max(0.18, t));
+  const mx = x1 + dx * at + nx * fs * 0.62;
+  const my = y1 + dy * at + ny * fs * 0.62;
+  let rot = Math.atan2(dy, dx) * 180 / Math.PI;
+  if (rot > 90) rot -= 180;
+  else if (rot < -90) rot += 180;
+  return `<line x1="${refNum(x1)}" y1="${refNum(y1)}" x2="${refNum(x2)}" y2="${refNum(y2)}"/>`
+    + `<line x1="${refNum(x1 - nx * tick)}" y1="${refNum(y1 - ny * tick)}" x2="${refNum(x1 + nx * tick)}" y2="${refNum(y1 + ny * tick)}"/>`
+    + `<line x1="${refNum(x2 - nx * tick)}" y1="${refNum(y2 - ny * tick)}" x2="${refNum(x2 + nx * tick)}" y2="${refNum(y2 + ny * tick)}"/>`
+    + `<text class="s-reftxt" x="${refNum(mx)}" y="${refNum(my)}" text-anchor="middle" dominant-baseline="middle" font-size="${refNum(Math.max(4, fs * 0.78))}" transform="rotate(${refNum(rot)} ${refNum(mx)} ${refNum(my)})">${esc(label)}</text>`;
+}
+
+function refMark(x, y, fs) {
+  const r = Math.max(3, fs * 0.24);
+  return `<line x1="${refNum(x - r)}" y1="${refNum(y)}" x2="${refNum(x + r)}" y2="${refNum(y)}"/><line x1="${refNum(x)}" y1="${refNum(y - r)}" x2="${refNum(x)}" y2="${refNum(y + r)}"/>`;
+}
+
+function guidePlace(plan, view, wall) {
+  if (!planDrag || planDrag.kind === 'tag' || !plan) return null;
+  if ((planDrag.view || 'plan') !== view) return null;
+  if (view === 'elev' && planDrag.wall !== wall) return null;
+  return dragPlace(planDrag, plan);
+}
+
+function refRoom(project, from, to, label, fs, t) {
+  if (Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]) < 6) return '';
+  const [x1, y1] = project(from[0], from[1], from[2]);
+  const [x2, y2] = project(to[0], to[1], to[2]);
+  return refSeg(x1, y1, x2, y2, label, fs, t);
+}
+
+function planDragGuides(plan, place, fs) {
+  if (!place) return '';
+  const inset = fs * 1.2;
+  let x = place.x;
+  let y = place.y;
+  if (!place.screenEdge) {
+    if (x <= 12) x = inset;
+    else if (x >= plan.W - 12) x = plan.W - inset;
+    if (y <= plan.scr.y + 6) y = plan.scr.y + inset;
+    else if (y >= plan.D - 12) y = plan.D - inset;
+  }
+  let html = refMark(place.screenEdge ? plan.W / 2 : place.x, place.screenEdge ? plan.scr.y : place.y, fs);
+  if (place.screenEdge) {
+    html += refSeg(plan.W / 2, 0, plan.W / 2, plan.scr.y, 'Back wall ' + ftin(plan.scr.y), fs);
+    html += refSeg(0, plan.scr.y, plan.scr.x0, plan.scr.y, 'Left ' + ftin(plan.scr.x0), fs);
+    html += refSeg(plan.scr.x1, plan.scr.y, plan.W, plan.scr.y, 'Right ' + ftin(plan.W - plan.scr.x1), fs);
+    html += `<text class="s-reftxt" x="${plan.W / 2}" y="${plan.scr.y + fs * 1.2}" text-anchor="middle" font-size="${fs * 0.75}">Floor ${esc(ftin(place.z))}</text>`;
+    return `<g class="s-ref">${html}</g>`;
+  }
+  html += refSeg(x, plan.scr.y, x, place.y, 'Screen ' + ftin(place.y - plan.scr.y), fs);
+  html += refSeg(0, y, place.x, y, 'Left ' + ftin(place.x), fs);
+  html += refSeg(place.x, y, plan.W, y, 'Right ' + ftin(plan.W - place.x), fs);
+  if (place.z > 0.5) html += `<text class="s-reftxt" x="${x + fs * 0.45}" y="${place.y - fs * 0.35}" font-size="${fs * 0.75}">Floor ${esc(ftin(place.z))}</text>`;
+  return `<g class="s-ref">${html}</g>`;
+}
+
+function elevDragGuides(plan, wall, place, fs) {
+  if (!place) return '';
+  const { W, D, H } = plan;
+  const len = (wall === 'screen' || wall === 'rear') ? W : D;
+  const U = (along) => (wall === 'screen' ? along : wall === 'rear' ? W - along : wall === 'left' ? D - along : along);
+  const along = (wall === 'screen' || wall === 'rear') ? place.x : place.y;
+  const sx = U(along);
+  const sy = H - (place.z || 0);
+  let html = refMark(sx, sy, fs);
+  html += refSeg(sx, sy, sx, H, 'Floor ' + ftin(place.z || 0), fs);
+  if (wall === 'left' || wall === 'right') {
+    html += refSeg(U(plan.scr.y), sy, sx, sy, 'Screen ' + ftin(Math.abs(place.y - plan.scr.y)), fs);
+    html += refSeg(sx, sy, U(D), sy, 'Rear ' + ftin(Math.abs(D - place.y)), fs);
+  } else {
+    html += refSeg(0, sy, sx, sy, 'Left ' + ftin(place.x), fs);
+    html += refSeg(sx, sy, len, sy, 'Right ' + ftin(W - place.x), fs);
+  }
+  return `<g class="s-ref">${html}</g>`;
+}
+
+function perspDragGuides(plan, place, project, fs) {
+  if (!place) return '';
+  const gap = 8;
+  let x = place.x;
+  let y = place.y;
+  const z = place.z || 0;
+  if (x <= 12) x = gap;
+  else if (x >= plan.W - 12) x = plan.W - gap;
+  if (y >= plan.D - 12) y = plan.D - gap;
+  const mark = project(place.x, place.y, z);
+  let html = refMark(mark[0], mark[1], fs);
+  html += refRoom(project, [x, y, z], [x, plan.scr.y, z], 'Screen ' + ftin(place.y - plan.scr.y), fs);
+  html += refRoom(project, [x, y, z], [x, y, 0], 'Floor ' + ftin(z), fs);
+  html += refRoom(project, [x, y, z], [gap, y, z], 'Left ' + ftin(place.x), fs);
+  html += refRoom(project, [x, y, z], [plan.W - gap, y, z], 'Right ' + ftin(plan.W - place.x), fs);
+  return `<g class="s-ref">${html}</g>`;
+}
+
+function salesStandingPlan(plan, fs) {
+  const label = fs * 0.82;
+  let html = '';
+  let slot = 0;
+  const add = (name, wall, along, z) => {
+    const point = wallXY(wall, along, plan.W, plan.D);
+    const inset = fs * (1.35 + slot * 0.9);
+    slot += 1;
+    if (wall === 'left' || wall === 'right') {
+      const x = wall === 'left' ? inset : plan.W - inset;
+      html += refSeg(x, plan.scr.y, x, point.y, `${name} · Screen ${ftin(point.y - plan.scr.y)}`, label);
+      html += refSeg(x, point.y, x, plan.D, `Rear ${ftin(plan.D - point.y)}`, label);
+      const anchor = wall === 'left' ? 'start' : 'end';
+      const tx = wall === 'left' ? x + fs * 0.35 : x - fs * 0.35;
+      html += `<text class="s-reftxt" x="${refNum(tx)}" y="${refNum(point.y)}" text-anchor="${anchor}" dominant-baseline="middle" font-size="${refNum(label)}">Floor ${esc(ftin(z))}</text>`;
+    } else {
+      const y = plan.D - inset;
+      html += refSeg(fs, y, point.x, y, `${name} · Left ${ftin(point.x)}`, label);
+      html += refSeg(point.x, y, plan.W - fs, y, `Right ${ftin(plan.W - point.x)}`, label);
+      html += refSeg(point.x, plan.scr.y, point.x, y, `Screen ${ftin(point.y - plan.scr.y)}`, label);
+      html += `<text class="s-reftxt" x="${refNum(point.x)}" y="${refNum(y - fs * 0.8)}" text-anchor="middle" font-size="${refNum(label)}">Floor ${esc(ftin(z))}</text>`;
+    }
+  };
+  plan.tvs.forEach((tv, index) => add(`TV ${index + 1}`, tv.wall, tv.a, tv.z));
+  if (plan.mon && !plan.mon.onCab) add('Monitor', plan.mon.wall, plan.mon.a, plan.mon.z);
+  return html ? `<g class="s-ref">${html}</g>` : '';
+}
+
+function salesStandingPersp(plan, project, fs) {
+  const label = fs * 0.7;
+  let html = '';
+  html += refRoom(project, [plan.ball.x, plan.ball.y, 2], [plan.ball.x, plan.scr.y, 2], 'Screen ' + ftin(plan.ball.y - plan.scr.y), label);
+  html += refRoom(project, [plan.ball.x, plan.ball.y, 2], [8, plan.ball.y, 2], 'Left ' + ftin(plan.ball.x), label);
+  html += refRoom(project, [plan.ball.x, plan.ball.y, 2], [plan.W - 8, plan.ball.y, 2], 'Right ' + ftin(plan.W - plan.ball.x), label);
+  html += refRoom(project, [plan.pj.x, plan.pj.y, plan.pj.z], [plan.pj.x, plan.scr.y, plan.pj.z], 'Throw ' + ftin(plan.pj.y - plan.scr.y), label);
+  const addWall = (name, wall, along, z) => {
+    const point = wallXY(wall, along, plan.W, plan.D);
+    const x = wall === 'left' ? 8 : wall === 'right' ? plan.W - 8 : point.x;
+    const y = wall === 'rear' ? plan.D - 8 : point.y;
+    html += refRoom(project, [x, y, z], [x, wall === 'rear' ? y : plan.scr.y, z], `${name} · ${ftin(point.y - plan.scr.y)}`, label, 0.68);
+    if (wall === 'rear') html += refRoom(project, [x, y, z], [8, y, z], 'Left ' + ftin(point.x), label, 0.4);
+    else html += refRoom(project, [x, y, z], [x, plan.D - 8, z], 'Rear ' + ftin(plan.D - point.y), label, 0.42);
+    html += refRoom(project, [x, y, z], [x, y, 0], 'Floor ' + ftin(z), label, 0.62);
+  };
+  plan.tvs.forEach((tv, index) => addWall(`TV ${index + 1}`, tv.wall, tv.a, tv.z));
+  if (plan.mon && !plan.mon.onCab) addWall('Monitor', plan.mon.wall, plan.mon.a, plan.mon.z);
+  return html ? `<g class="s-ref">${html}</g>` : '';
+}
+
 function tagPos(item, W, D, fs) {
   if (item.plan) return { x: clampIn(item.plan.x + item.plan.w + fs * 0.7, W), y: clampIn(item.plan.y - fs * 0.2, D) };
   if (item.wall === 'left') return { x: fs * 1.4, y: (item.a0 + item.a1) / 2 };
@@ -649,6 +803,8 @@ function planSVG(plan, mode) {
   markup += `<text class="s-lblm" x="${-pad * 0.62}" y="${D / 2}" text-anchor="middle" font-size="${fs * 0.8}" transform="rotate(-90 ${-pad * 0.62} ${D / 2})">LEFT WALL</text>`;
   markup += `<text class="s-lblm" x="${W + pad * 0.7}" y="${D / 2}" text-anchor="middle" font-size="${fs * 0.8}" transform="rotate(90 ${W + pad * 0.7} ${D / 2})">RIGHT WALL</text>`;
   markup += `<text class="s-lblm" x="${W / 2}" y="${D + pad * 0.75}" text-anchor="middle" font-size="${fs * 0.8}">REAR WALL · scale 1 sq = 1 ft</text>`;
+  const draggedPlan = guidePlace(plan, 'plan');
+  markup += draggedPlan ? planDragGuides(plan, draggedPlan, fs) : (mode === 'sales' ? salesStandingPlan(plan, fs) : '');
   return markup + '</svg>';
 }
 
@@ -781,6 +937,7 @@ function elevSVG(plan, wall, mode) {
   plan.tvs.filter((tv) => tv.wall === wall).forEach((tv) => { markup += dimV(Z(tv.z), H, U(tv.a) + tv.w / 2 + fs * 0.7, ftin(tv.z) + ' ctr', fs * 0.75); });
   const names = { screen: 'SCREEN WALL — looking at screen', left: 'LEFT WALL — screen at right', right: 'RIGHT WALL — screen at left', rear: 'REAR WALL — looking back' };
   markup += `<text class="s-lbl" x="0" y="${H + pad * 0.72}" font-size="${fs * 0.9}">${names[wall]}</text>`;
+  markup += elevDragGuides(plan, wall, guidePlace(plan, 'elev', wall), fs);
   return markup + '</svg>';
 }
 
@@ -801,7 +958,7 @@ function perspectiveSVG(plan) {
   const maxX = Math.max(...xs);
   const minY = Math.min(...ys);
   const maxY = Math.max(...ys);
-  const pad = (maxX - minX) * 0.04;
+  const pad = (maxX - minX) * 0.1;
   let markup = `<svg data-view="persp" data-camx="${camX}" data-camy="${camY}" data-camz="${camZ}" viewBox="${minX - pad} ${minY - pad} ${maxX - minX + pad * 2} ${maxY - minY + pad * 2}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Rendered view of the simulator bay"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--sky1)"/><stop offset="1" stop-color="var(--sky2)"/></linearGradient><pattern id="turfp" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" class="s-floor"/><path d="M0 6 L3 0" class="s-stud" style="stroke:var(--turf2);opacity:.5"/></pattern></defs>`;
   markup += poly([[0, 0, H], [W, 0, H], [W, D, H], [0, D, H]], 's-ceil');
   plan.panels.filter((panel) => panel.wall === 'ceiling').forEach((panel) => {
@@ -911,6 +1068,9 @@ function perspectiveSVG(plan) {
     markup += hitPoly([[x, plan.mon.a - plan.mon.w / 2, plan.mon.z - plan.mon.h / 2], [x, plan.mon.a + plan.mon.w / 2, plan.mon.z - plan.mon.h / 2], [x, plan.mon.a + plan.mon.w / 2, plan.mon.z + plan.mon.h / 2], [x, plan.mon.a - plan.mon.w / 2, plan.mon.z + plan.mon.h / 2]]);
     markup += '</g>';
   }
+  const viewW = Math.max(40, maxX - minX);
+  const draggedPersp = guidePlace(plan, 'persp');
+  markup += draggedPersp ? perspDragGuides(plan, draggedPersp, project, viewW / 28) : salesStandingPersp(plan, project, viewW / 34);
   return markup + '</svg>';
 }
 
@@ -1207,11 +1367,11 @@ function salesHTML(plan) {
     <div class="stat"><div class="k">Image</div><div class="v">${ftin(plan.img.w)} × ${ftin(plan.img.h)}</div></div>
     <div class="stat"><div class="k">Estimate</div><div class="v">${money(priced.total)}</div></div>
   </div>
-  <div class="panel"><div class="panel-h"><h2>Client visual</h2><span class="savestate">View from behind the hitting area · ${esc(plan.lm.name)} · ${esc(plan.pj.name.split(' (')[0])} · ${plan.panels.length} HUSH 2×2 panels</span></div><div class="panel-b"><div class="drawing">${perspectiveSVG(plan)}</div><p class="savestate" style="margin-top:8px">Drag the mat, projector, launch monitor, TV, monitor, or computer. The matching dimension updates.</p></div></div>
+  <div class="panel"><div class="panel-h"><h2>Client visual</h2><span class="savestate">View from behind the hitting area · ${esc(plan.lm.name)} · ${esc(plan.pj.name.split(' (')[0])} · ${plan.panels.length} HUSH 2×2 panels</span></div><div class="panel-b"><div class="drawing">${perspectiveSVG(plan)}</div><p class="savestate" style="margin-top:8px">Reference lines mark each TV, the monitor, the ball, and the projector. Drag an item and the lines follow it, showing the distance from the impact screen, the walls, and the floor.</p></div></div>
   <div class="grid2">
     <div class="panel"><div class="panel-h"><h2>Floor plan</h2></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'sales')}</div>
       <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:#2c312f"></i>HUSH panel</span><span><i class="sw" style="background:var(--turf);opacity:.5"></i>Turf</span><span><i class="sw" style="background:var(--green)"></i>Putting green</span><span><i class="sw" style="border:1px dashed var(--warn)"></i>Swing radius</span><span><i class="sw" style="background:var(--cad);opacity:.25"></i>Projector throw</span></div>
-      <p class="savestate" style="margin-top:8px">Drag the mat, screen, projector, launch monitor, TV, monitor, or computer. Ball-to-screen, center offset, throw, and wall positions update.</p></div></div>
+      <p class="savestate" style="margin-top:8px">Reference lines show where each TV and the monitor sit. Drag an item and the lines update the distance from the impact screen, each side wall, and the floor.</p></div></div>
     <div class="panel"><div class="panel-h"><h2>Space check</h2>${fitPill(plan.fit)}</div><div class="panel-b">${checksHTML(plan)}<p class="savestate" style="margin-top:10px">Clearances are planning rules of thumb. Confirm with a swing test and the manufacturer's install specs before ordering.</p></div></div>
   </div>
   <div class="panel"><div class="panel-h"><h2>Quote</h2><div class="actions"><div class="seg" role="group" aria-label="Quote view"><button type="button" data-act="cv" data-v="0" aria-pressed="${!client}">Internal</button><button type="button" data-act="cv" data-v="1" aria-pressed="${client}">Client</button></div><button type="button" class="btn" data-act="copyquote">Copy quote</button><button type="button" class="btn" data-act="dl-sales">Download proposal</button></div></div>
@@ -1228,8 +1388,8 @@ function builderHTML(plan) {
   return `<div class="sheet-head"><div><h1>Builder Rough-In CAD</h1><p>For the home builder, remodeler, or the homeowner's trades: backing, receptacles, low-voltage, and 2 in tech tubes before drywall. X is from the left wall facing the screen. Y is from the screen wall.</p></div>${titleBlock()}</div>
   <div class="panel"><div class="panel-h"><h2>Reflected ceiling + floor plan</h2><div class="actions"><button type="button" class="btn" data-act="reset-tags">Reset tags</button><button type="button" class="btn" data-act="dl-builder">Download builder sheet</button></div></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'builder')}</div>
     <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:#2c312f"></i>HUSH 2×2</span><span><i class="sw" style="border-top:2px dashed var(--cad);height:0"></i>Screen centerline</span><span><i class="sw" style="background:var(--backing);opacity:.5"></i>Backing / blocking</span><span><svg width="14" height="14" viewBox="-7 -7 14 14">${elecSym(0, 0, 5.5, 'ceiling')}</svg>Receptacle</span><span><svg width="14" height="14" viewBox="-7 -7 14 14">${elecSym(0, 0, 5.5, 'floor')}</svg>Floor box</span><span><svg width="14" height="14" viewBox="-7 -7 14 14"><polygon class="s-data" points="0,-5 5,4 -5,4"/></svg>Cat6</span><span><i class="sw" style="border-top:2px dashed var(--tube);height:0"></i>2 in tech tube</span><span><i class="sw" style="border:1px dashed var(--bad)"></i>No-fixture ring</span></div>
-    <p class="savestate" style="margin-top:8px">Drag the mat to place the ball. A readout shows the distance from the impact screen, each side wall, and the floor. Drag a TV onto the left or right wall; set each TV's size in the specification. The projector and overhead launch monitor stay on the target line. On an elevation, drag up or down to set the height.</p></div></div>
-  <div class="panel"><div class="panel-h"><h2>Wall elevation</h2>${wallSeg()}</div><div class="panel-b"><div class="drawing">${elevSVG(plan, S.elevWall, 'builder')}</div><p class="savestate" style="margin-top:8px">Drag an item along the wall or up and down. Position and height update in the specification.</p></div></div>
+    <p class="savestate" style="margin-top:8px">Drag an item and reference lines mark the distance from the impact screen, each side wall, and the floor. Drag a TV onto the left or right wall; set each TV's size in the specification. The projector and overhead launch monitor stay on the target line.</p></div></div>
+  <div class="panel"><div class="panel-h"><h2>Wall elevation</h2>${wallSeg()}</div><div class="panel-b"><div class="drawing">${elevSVG(plan, S.elevWall, 'builder')}</div><p class="savestate" style="margin-top:8px">Drag an item and reference lines mark the distance from the screen, the rear wall, and the floor. Position and height update in the specification.</p></div></div>
   <div class="panel"><div class="panel-h"><h2>Backing schedule</h2></div><div class="panel-b tablewrap"><table><thead><tr><th>Tag</th><th>Item</th><th>Where</th><th>Spec</th><th>Location</th><th>Size</th></tr></thead><tbody>${backingRows}</tbody></table></div></div>
   <div class="grid2">
     <div class="panel"><div class="panel-h"><h2>Electrical + low voltage</h2></div><div class="panel-b tablewrap"><table><thead><tr><th>Tag</th><th>Item</th><th>Spec</th><th>Location</th><th>Height</th></tr></thead><tbody>${powerRows}</tbody></table></div></div>
@@ -1252,10 +1412,10 @@ function installerHTML(plan) {
   const done = sequence.filter((step) => checks[step[0]]).length;
   const rows = places.map((place, index) => `<tr><td class="m">${index + 1}</td><td>${esc(place.item)}</td><td class="m">${place.x == null ? '—' : ftin(place.x)}</td><td class="m">${ftin(place.y)}</td><td class="m">${typeof place.z === 'number' ? ftin(place.z) : esc(place.z)}</td><td>${esc(place.mount)}</td><td>${esc(place.notes)}</td></tr>`).join('');
   return `<div class="sheet-head"><div><h1>Installer Build Plan</h1><p>Placement for the crew. X is measured from the left wall facing the screen. Y is from the screen wall. Numbers on the plan match the schedule.</p></div>${titleBlock()}</div>
-  <div class="panel"><div class="panel-h"><h2>Placement plan</h2><button type="button" class="btn" data-act="dl-installer">Download installer sheet</button></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'installer')}</div><p class="savestate" style="margin-top:8px">Drag an item to place it. The schedule dimensions update with the move.</p></div></div>
+  <div class="panel"><div class="panel-h"><h2>Placement plan</h2><button type="button" class="btn" data-act="dl-installer">Download installer sheet</button></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'installer')}</div><p class="savestate" style="margin-top:8px">Drag an item to place it. Reference lines mark the distance from the impact screen, each side wall, and the floor, and the schedule updates with the move.</p></div></div>
   <div class="panel"><div class="panel-h"><h2>Placement schedule</h2></div><div class="panel-b tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>X (left wall)</th><th>Y (back wall)</th><th>Height</th><th>Mount</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table></div></div>
   <div class="grid2">
-    <div class="panel"><div class="panel-h"><h2>Wall elevation</h2>${wallSeg()}</div><div class="panel-b"><div class="drawing">${elevSVG(plan, S.elevWall, 'installer')}</div><p class="savestate" style="margin-top:8px">Drag an item along the wall or up and down. Position and height update in the schedule.</p></div></div>
+    <div class="panel"><div class="panel-h"><h2>Wall elevation</h2>${wallSeg()}</div><div class="panel-b"><div class="drawing">${elevSVG(plan, S.elevWall, 'installer')}</div><p class="savestate" style="margin-top:8px">Drag an item and reference lines mark the distance from the screen, the rear wall, and the floor. The schedule updates with the move.</p></div></div>
     <div class="panel"><div class="panel-h"><h2>Install sequence</h2><div style="display:flex;align-items:center;gap:8px"><span class="savestate">${done}/${sequence.length}</span><div class="progress"><i style="width:${sequence.length ? done / sequence.length * 100 : 0}%"></i></div></div></div><div class="panel-b">
       <ol class="steps">${sequence.map(([key, title, detail]) => `<li class="${checks[key] ? 'done' : ''}"><input type="checkbox" id="st_${key}" data-act="step" data-v="${key}" ${checks[key] ? 'checked' : ''} aria-label="${esc(title)}"><label for="st_${key}"><b>${esc(title)}</b><small>${esc(detail)}</small></label></li>`).join('')}</ol>
       ${S.currentId ? '' : '<p class="savestate">Save the job to keep checklist progress.</p>'}</div></div>
@@ -1787,6 +1947,7 @@ document.addEventListener('pointerdown', (event) => {
   };
   document.body.classList.add('dragging');
   showDragRead(planDrag, event.clientX, event.clientY);
+  scheduleRender();
 });
 document.addEventListener('pointermove', (event) => {
   if (!planDrag || event.pointerId !== planDrag.pointerId) return;
@@ -1802,6 +1963,7 @@ function endPlanDrag(event) {
   planDrag = null;
   document.body.classList.remove('dragging');
   hideDragRead();
+  scheduleRender();
 }
 document.addEventListener('pointerup', endPlanDrag);
 document.addEventListener('pointercancel', endPlanDrag);
