@@ -458,6 +458,44 @@ tr.grand td { font-family: var(--display); font-size: 22px; border-top: 2px soli
 
 .pb-row input { text-align: right; }
 
+.dragread {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 7px 10px;
+  border-radius: 6px;
+  max-width: min(320px, calc(100vw - 16px));
+}
+
+.tvrows { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 14px; }
+
+.tv-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 8px 10px;
+  background: var(--paper);
+}
+
+.tv-card > b {
+  display: block;
+  font-family: var(--display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 13px;
+  margin: 0 4px 6px;
+}
+
+.tv-fields { padding: 0; }
+
+@media print {
+  .dragread { display: none !important; }
+}
+
 .toast {
   position: fixed;
   right: max(16px, env(safe-area-inset-right, 0px));

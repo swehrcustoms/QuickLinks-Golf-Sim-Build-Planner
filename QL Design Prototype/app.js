@@ -130,6 +130,22 @@ function hdmiFor(ft) {
 
 function cap(value) { return value ? value[0].toUpperCase() + value.slice(1) : ''; }
 
+function ensureTvs(sp) {
+  const count = Math.max(0, Math.min(3, +sp.tvCount || 0));
+  if (!Array.isArray(sp.tvs)) sp.tvs = [];
+  for (let i = 0; i < count; i += 1) {
+    if (!sp.tvs[i] || typeof sp.tvs[i] !== 'object') {
+      sp.tvs[i] = {
+        wall: i === 0 ? (sp.tvWall || 'left') : (i % 2 ? 'right' : 'left'),
+        size: +sp.tvSize || 65,
+        pos: sp.tvPos && sp.tvPos[i] != null && sp.tvPos[i] !== '' ? +sp.tvPos[i] : '',
+        z: +sp.tvH || 66,
+      };
+    }
+  }
+  sp.tvs.length = count;
+}
+
 function wallXY(wall, along, W, D) {
   if (wall === 'left') return { x: 0, y: along };
   if (wall === 'right') return { x: W, y: along };
@@ -294,24 +310,26 @@ function compute(sp) {
     mon = { wall: cab.wall, a: cab.a, z: cab.h + 10, w: 24, h: 14, onCab: true };
   }
 
-  const tvs = [];
-  const tvW = (+sp.tvSize || 65) * 0.872;
-  const tvHt = (+sp.tvSize || 65) * 0.49;
-  const tvCount = +sp.tvCount || 0;
-  for (let i = 0; i < tvCount; i += 1) {
+  ensureTvs(sp);
+  const tvs = sp.tvs.map((item, index) => {
+    const size = Math.min(98, Math.max(32, +item.size || 65));
+    const tvW = size * 0.872;
+    const tvHt = size * 0.49;
+    const wall = item.wall === 'right' || item.wall === 'rear' ? item.wall : 'left';
     let along;
-    if (sp.tvWall === 'rear') along = W * (i + 1) / (tvCount + 1);
+    if (wall === 'rear') along = W * (index + 1) / (sp.tvs.length + 1);
     else {
       const y0 = ball.y + 36;
       const y1 = D - tvW / 2 - 6;
-      along = tvCount === 1 ? (y0 + y1) / 2 : y0 + (y1 - y0) * i / (tvCount - 1 || 1);
+      along = sp.tvs.length === 1 ? (y0 + y1) / 2 : y0 + (y1 - y0) * index / (sp.tvs.length - 1 || 1);
     }
-    if (sp.tvPos && sp.tvPos[i] != null && sp.tvPos[i] !== '') along = +sp.tvPos[i];
-    along = sp.tvWall === 'rear'
+    if (item.pos != null && item.pos !== '') along = +item.pos;
+    along = wall === 'rear'
       ? Math.min(Math.max(along, tvW / 2), W - tvW / 2)
       : Math.min(Math.max(along, scr.y + tvW / 2), D - tvW / 2);
-    tvs.push({ wall: sp.tvWall, a: along, z: +sp.tvH || 66, w: tvW, h: tvHt, size: +sp.tvSize || 65 });
-  }
+    const z = Math.min(Math.max(+item.z || 66, tvHt / 2 + 6), H - tvHt / 2 - 6);
+    return { wall, a: along, z, w: tvW, h: tvHt, size };
+  });
 
   const turfArea = sp.turf === 'full' ? W * Math.max(0, D - scr.y) : scr.w * Math.max(0, D - scr.y);
   const cutArea = sp.matCutout ? mat.w * mat.d : 0;
@@ -419,10 +437,10 @@ function quote(sp, plan, pb) {
   add('Projection & tech', 'Projector mount', 1, 'ea', pb.projMount, 0);
   add('Projection & tech', 'Simulator computer', 1, 'ea', pb.computer, pb['hr:pc']);
   if (plan.mon) add('Projection & tech', 'Computer monitor', 1, 'ea', pb.monitor, pb['hr:mon']);
-  if (plan.tvs.length) {
-    add('Projection & tech', `TV ${sp.tvSize}"`, plan.tvs.length, 'ea', pb.tv, plan.tvs.length * pb['hr:tv']);
-    add('Projection & tech', 'TV mount', plan.tvs.length, 'ea', pb.tvMount, 0);
-  }
+  plan.tvs.forEach((tv, index) => {
+    add('Projection & tech', `TV ${index + 1} · ${tv.size}" · ${tv.wall} wall`, 1, 'ea', pb.tv, pb['hr:tv']);
+  });
+  if (plan.tvs.length) add('Projection & tech', 'TV mount', plan.tvs.length, 'ea', pb.tvMount, 0);
   const feet = Math.round(plan.tubes.reduce((sum, tube) => sum + tube.len, 0));
   add('Projection & tech', 'HDMI/USB/Cat6 cabling + tech tube', feet, 'ft', pb.cablePerFt, 0);
   const hours = lines.reduce((sum, line) => sum + line.hrs, 0) + (pb['hr:cal'] || 0);
@@ -996,9 +1014,6 @@ const FORM = [
     ['s.monitor', 'Monitor', 'select', { opts: [['wall', 'Wall arm at hitting area'], ['cabinet', 'On computer cabinet'], ['none', 'None']], full: 1 }],
     ['s.monZ', 'Monitor center above floor (in)', 'number'],
     ['s.tvCount', 'TVs', 'select', { opts: [['0', '0'], ['1', '1'], ['2', '2'], ['3', '3']] }],
-    ['s.tvWall', 'TV wall', 'select', { opts: [['left', 'Left'], ['right', 'Right'], ['rear', 'Rear']] }],
-    ['s.tvSize', 'TV size (in)', 'number'],
-    ['s.tvH', 'TV center above floor (in)', 'number'],
   ]],
   ['Turf, mat & putting', [
     ['s.turf', 'Turf', 'select', { opts: [['full', 'Full room'], ['bay', 'Hitting bay only']] }],
@@ -1039,6 +1054,7 @@ function buildForm() {
       html += '</div>';
     });
     html += '</div></details>';
+    if (title.startsWith('Computer')) html = html.replace(/<\/div><\/details>$/, '<div class="tvrows" id="tvRows"></div></div></details>');
   });
   html += '<details><summary><h3>Notes</h3></summary><div class="fields"><div class="f full"><label for="f_notes">Job notes</label><textarea id="f_notes" data-p="notes" rows="4"></textarea></div></div></details>';
   $('#spec').innerHTML = html;
@@ -1055,6 +1071,7 @@ function fillForm() {
     } else el.value = value ?? '';
   });
   updateHints();
+  syncTvRows();
 }
 
 function updateHints() {
@@ -1064,8 +1081,45 @@ function updateHints() {
   });
 }
 
+function syncTvRows() {
+  const host = document.getElementById('tvRows');
+  if (!host || !S.job) return;
+  ensureTvs(S.job.spec);
+  const tvs = S.job.spec.tvs;
+  if (host.childElementCount !== tvs.length) {
+    host.innerHTML = tvs.map((tv, index) => `<div class="tv-card"><b>TV ${index + 1}</b><div class="fields tv-fields">
+      <div class="f"><label for="tv_${index}_wall">Wall</label><select id="tv_${index}_wall" data-tv="${index}" data-k="wall"><option value="left">Left</option><option value="right">Right</option></select></div>
+      <div class="f"><label for="tv_${index}_size">Size (in)</label><input id="tv_${index}_size" data-tv="${index}" data-k="size" type="number" min="32" max="98" step="1"></div>
+      <div class="f"><label for="tv_${index}_z">Center above floor (in)</label><input id="tv_${index}_z" data-tv="${index}" data-k="z" type="number" step="any"><span class="hint" id="tv_${index}_zh"></span></div>
+    </div></div>`).join('');
+  }
+  host.querySelectorAll('[data-tv]').forEach((el) => {
+    if (document.activeElement === el) return;
+    const tv = tvs[+el.dataset.tv];
+    if (!tv) return;
+    el.value = tv[el.dataset.k] ?? '';
+  });
+  tvs.forEach((tv, index) => {
+    const hint = document.getElementById(`tv_${index}_zh`);
+    if (hint) hint.textContent = ftin(+tv.z || 0);
+  });
+}
+
 function onField(event) {
   const el = event.target;
+  if (el.dataset.tv != null) {
+    ensureTvs(S.job.spec);
+    const tv = S.job.spec.tvs[+el.dataset.tv];
+    if (!tv) return;
+    if (el.dataset.k === 'wall') {
+      tv.wall = el.value === 'right' ? 'right' : 'left';
+      tv.pos = '';
+    } else tv[el.dataset.k] = el.value === '' ? '' : +el.value;
+    updateHints();
+    markDirty();
+    scheduleRender();
+    return;
+  }
   const path = el.dataset.p;
   if (!path) return;
   let value;
@@ -1086,7 +1140,7 @@ function onField(event) {
     if (ratio) ratio.value = S.job.spec.tr;
   }
   if (path === 's.tvCount' || path === 's.cups') S.job.spec[path.slice(2)] = +value;
-  if (path === 's.tvWall' || path === 's.tvCount' || path === 's.tvSize') delete S.job.spec.tvPos;
+  if (path === 's.tvCount') ensureTvs(S.job.spec);
   if (path === 's.monitor' || path === 's.handed') delete S.job.spec.monAlong;
   if (path === 's.compWall') S.job.spec.compPos = 24;
   updateHints();
@@ -1174,7 +1228,7 @@ function builderHTML(plan) {
   return `<div class="sheet-head"><div><h1>Builder Rough-In CAD</h1><p>For the home builder, remodeler, or the homeowner's trades: backing, receptacles, low-voltage, and 2 in tech tubes before drywall. X is from the left wall facing the screen. Y is from the screen wall.</p></div>${titleBlock()}</div>
   <div class="panel"><div class="panel-h"><h2>Reflected ceiling + floor plan</h2><div class="actions"><button type="button" class="btn" data-act="reset-tags">Reset tags</button><button type="button" class="btn" data-act="dl-builder">Download builder sheet</button></div></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'builder')}</div>
     <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:#2c312f"></i>HUSH 2×2</span><span><i class="sw" style="border-top:2px dashed var(--cad);height:0"></i>Screen centerline</span><span><i class="sw" style="background:var(--backing);opacity:.5"></i>Backing / blocking</span><span><svg width="14" height="14" viewBox="-7 -7 14 14">${elecSym(0, 0, 5.5, 'ceiling')}</svg>Receptacle</span><span><svg width="14" height="14" viewBox="-7 -7 14 14">${elecSym(0, 0, 5.5, 'floor')}</svg>Floor box</span><span><svg width="14" height="14" viewBox="-7 -7 14 14"><polygon class="s-data" points="0,-5 5,4 -5,4"/></svg>Cat6</span><span><i class="sw" style="border-top:2px dashed var(--tube);height:0"></i>2 in tech tube</span><span><i class="sw" style="border:1px dashed var(--bad)"></i>No-fixture ring</span></div>
-    <p class="savestate" style="margin-top:8px">Drag the mat to place the ball. Ball-to-screen and the center offset update. The projector and overhead launch monitor stay on the target line; drag them toward or away from the screen. Drag a TV, monitor, or computer along its wall. On an elevation, drag up or down to set the height. Drag a tag if it covers another mark.</p></div></div>
+    <p class="savestate" style="margin-top:8px">Drag the mat to place the ball. A readout shows the distance from the impact screen, each side wall, and the floor. Drag a TV onto the left or right wall; set each TV's size in the specification. The projector and overhead launch monitor stay on the target line. On an elevation, drag up or down to set the height.</p></div></div>
   <div class="panel"><div class="panel-h"><h2>Wall elevation</h2>${wallSeg()}</div><div class="panel-b"><div class="drawing">${elevSVG(plan, S.elevWall, 'builder')}</div><p class="savestate" style="margin-top:8px">Drag an item along the wall or up and down. Position and height update in the specification.</p></div></div>
   <div class="panel"><div class="panel-h"><h2>Backing schedule</h2></div><div class="panel-b tablewrap"><table><thead><tr><th>Tag</th><th>Item</th><th>Where</th><th>Spec</th><th>Location</th><th>Size</th></tr></thead><tbody>${backingRows}</tbody></table></div></div>
   <div class="grid2">
@@ -1565,6 +1619,64 @@ function perspRoom(drag, point, svg) {
   };
 }
 
+function dragPlace(drag, plan) {
+  if (drag.kind === 'ball') return { name: 'Ball', x: plan.ball.x, y: plan.ball.y, z: 0 };
+  if (drag.kind === 'screen') return { name: 'Screen', x: plan.W / 2, y: plan.scr.y, z: plan.scr.z0, screenEdge: true };
+  if (drag.kind === 'proj') return { name: 'Projector', x: plan.pj.x, y: plan.pj.y, z: plan.pj.z };
+  if (drag.kind === 'lm') return { name: 'Launch monitor', x: plan.lm.x, y: plan.lm.y, z: plan.lm.z || 0 };
+  if (drag.kind === 'cab') {
+    const point = wallXY(plan.cab.wall, plan.cab.a, plan.W, plan.D);
+    return { name: 'Computer', x: point.x, y: point.y, z: plan.cab.h };
+  }
+  if (drag.kind === 'tv') {
+    const tv = plan.tvs[+drag.index];
+    if (!tv) return null;
+    const point = wallXY(tv.wall, tv.a, plan.W, plan.D);
+    return { name: `TV ${+drag.index + 1} · ${tv.size}"`, x: point.x, y: point.y, z: tv.z };
+  }
+  if (drag.kind === 'mon' && plan.mon) {
+    const point = wallXY(plan.mon.wall, plan.mon.a, plan.W, plan.D);
+    return { name: 'Monitor', x: point.x, y: point.y, z: plan.mon.z };
+  }
+  return null;
+}
+
+function dragReadout(drag, plan) {
+  const place = dragPlace(drag, plan);
+  if (!place) return '';
+  if (place.screenEdge) {
+    return `Screen ${ftin(0)} · Back wall ${ftin(plan.scr.y)} · Left ${ftin(plan.scr.x0)} · Right ${ftin(plan.W - plan.scr.x1)} · Floor ${ftin(place.z)}`;
+  }
+  return `${place.name} · Screen ${ftin(place.y - plan.scr.y)} · Left ${ftin(place.x)} · Right ${ftin(plan.W - place.x)} · Floor ${ftin(place.z)}`;
+}
+
+function showDragRead(drag, clientX, clientY) {
+  const text = dragReadout(drag, compute(S.job.spec));
+  let node = document.getElementById('dragRead');
+  if (!text) {
+    if (node) node.hidden = true;
+    return;
+  }
+  if (!node) {
+    node = document.createElement('div');
+    node.id = 'dragRead';
+    node.className = 'dragread';
+    document.body.appendChild(node);
+  }
+  node.textContent = text;
+  node.hidden = false;
+  const width = node.offsetWidth || 280;
+  const left = Math.min(Math.max(8, clientX + 16), window.innerWidth - width - 8);
+  const top = Math.max(8, clientY - node.offsetHeight - 14);
+  node.style.left = left + 'px';
+  node.style.top = top + 'px';
+}
+
+function hideDragRead() {
+  const node = document.getElementById('dragRead');
+  if (node) node.hidden = true;
+}
+
 function applyDrag(drag, point, svg) {
   const spec = S.job.spec;
   const plan = compute(spec);
@@ -1615,12 +1727,24 @@ function applyDrag(drag, point, svg) {
     if (cab.wall === 'rear') spec.compPos = Math.round(clampNum(along, cab.w / 2, plan.W - cab.w / 2) - cab.w / 2);
     else spec.compPos = Math.round(plan.D - clampNum(along, plan.scr.y + cab.w / 2, plan.D - cab.w / 2) - cab.w / 2);
   } else if (drag.kind === 'tv') {
-    const tv = plan.tvs[+drag.index];
-    if (!tv) return;
-    const along = tv.wall === 'rear' || tv.wall === 'screen' ? x : y;
-    if (!Array.isArray(spec.tvPos)) spec.tvPos = [];
-    spec.tvPos[+drag.index] = Math.round(clampNum(along, tv.w / 2, tv.wall === 'rear' ? plan.W - tv.w / 2 : plan.D - tv.w / 2));
-    if (z != null) spec.tvH = Math.round(clampNum(z, tv.h / 2 + 6, plan.H - tv.h / 2 - 6));
+    ensureTvs(spec);
+    const item = spec.tvs[+drag.index];
+    const drawn = plan.tvs[+drag.index];
+    if (!item || !drawn) return;
+    if (drag.view === 'plan') {
+      if (x <= 30) item.wall = 'left';
+      else if (x >= plan.W - 30) item.wall = 'right';
+    }
+    const wall = item.wall === 'right' || item.wall === 'rear' ? item.wall : 'left';
+    const width = Math.min(98, Math.max(32, +item.size || drawn.size)) * 0.872;
+    const along = wall === 'rear' ? x : y;
+    const minAlong = wall === 'rear' ? width / 2 : plan.scr.y + width / 2;
+    const maxAlong = wall === 'rear' ? plan.W - width / 2 : plan.D - width / 2;
+    item.pos = Math.round(clampNum(along, minAlong, maxAlong));
+    if (z != null) {
+      const height = width / 0.872 * 0.49;
+      item.z = Math.round(clampNum(z, height / 2 + 6, plan.H - height / 2 - 6));
+    }
   } else if (drag.kind === 'mon' && plan.mon) {
     const along = plan.mon.wall === 'rear' ? x : y;
     spec.monAlong = Math.round(clampNum(along, 12, plan.mon.wall === 'rear' ? plan.W - 12 : plan.D - 12));
@@ -1662,6 +1786,7 @@ document.addEventListener('pointerdown', (event) => {
     yval: handle.dataset.yval || '',
   };
   document.body.classList.add('dragging');
+  showDragRead(planDrag, event.clientX, event.clientY);
 });
 document.addEventListener('pointermove', (event) => {
   if (!planDrag || event.pointerId !== planDrag.pointerId) return;
@@ -1670,11 +1795,13 @@ document.addEventListener('pointermove', (event) => {
   const point = svgPoint(svg, event.clientX, event.clientY);
   if (!point) return;
   applyDrag(planDrag, point, svg);
+  showDragRead(planDrag, event.clientX, event.clientY);
 });
 function endPlanDrag(event) {
   if (!planDrag || event.pointerId !== planDrag.pointerId) return;
   planDrag = null;
   document.body.classList.remove('dragging');
+  hideDragRead();
 }
 document.addEventListener('pointerup', endPlanDrag);
 document.addEventListener('pointercancel', endPlanDrag);
