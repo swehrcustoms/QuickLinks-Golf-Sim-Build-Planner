@@ -538,6 +538,15 @@ tr.grand td { font-family: var(--display); font-size: 22px; border-top: 2px soli
 .s-turf { fill: var(--turf); opacity: 0.35; }
 .s-green { fill: var(--green); opacity: 0.75; stroke: var(--turf2); stroke-width: 1; }
 .s-cup { fill: var(--surface); stroke: var(--ink); stroke-width: 1.2; }
+.s-cupnum {
+  fill: var(--ink);
+  font-family: var(--mono);
+  font-weight: 500;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
 .s-mat { fill: var(--sunk); stroke: var(--ink); stroke-width: 1.4; }
 .s-matcut { fill: none; stroke: var(--bad); stroke-width: 1.6; stroke-dasharray: 6 4; }
 .s-strip { fill: var(--green); stroke: var(--turf2); stroke-width: 0.8; }

@@ -333,23 +333,32 @@ function compute(sp) {
 
   const turfArea = sp.turf === 'full' ? W * Math.max(0, D - scr.y) : scr.w * Math.max(0, D - scr.y);
   const cutArea = sp.matCutout ? mat.w * mat.d : 0;
-  const greenY0 = scr.y + 24;
-  const greenY1 = mat.y - 18;
-  const green = greenY1 - greenY0 >= 36 && +sp.cups > 0
-    ? { x0: W / 2 - scr.w * 0.32, x1: W / 2 + scr.w * 0.32, y0: greenY0, y1: greenY1 }
-    : null;
+  const green = null;
+  const cupCount = Math.max(0, Math.min(4, +sp.cups || 0));
+  if (!Array.isArray(sp.cupPos)) sp.cupPos = [];
   const cups = [];
-  if (+sp.cups > 0) {
-    if (!green) chk.push(['warn', 'Not enough room between the screen and the mat for a putting green. Cups would sit in the screen rebound zone.']);
-    else {
-      const count = +sp.cups;
-      for (let i = 0; i < count; i += 1) {
-        cups.push({
-          x: green.x0 + (green.x1 - green.x0) * (i + 1) / (count + 1),
-          y: green.y0 + (green.y1 - green.y0) * (i % 2 ? 0.35 : 0.6),
-        });
-      }
+  const cupMinX = 10;
+  const cupMaxX = W - 10;
+  const cupMinY = scr.y + 8;
+  const cupMaxY = D - 10;
+  for (let i = 0; i < cupCount; i += 1) {
+    const saved = sp.cupPos[i];
+    let cupX;
+    let cupY;
+    if (saved && Number.isFinite(+saved.x) && Number.isFinite(+saved.y)) {
+      cupX = +saved.x;
+      cupY = +saved.y;
+    } else {
+      cupX = W * (i + 1) / (cupCount + 1);
+      const frontEnd = mat.y - 12;
+      cupY = frontEnd - cupMinY >= 24
+        ? cupMinY + (frontEnd - cupMinY) * (cupCount === 1 ? 0.55 : (i % 2 ? 0.32 : 0.68))
+        : Math.min(cupMaxY, mat.y + mat.d + 24 + i * 28);
     }
+    cups.push({
+      x: Math.min(cupMaxX, Math.max(cupMinX, cupX)),
+      y: Math.min(cupMaxY, Math.max(cupMinY, cupY)),
+    });
   }
   const nofix = { x: ball.x, y: ball.y, r: swingR + 12 };
 
@@ -646,11 +655,6 @@ function planSVG(plan, mode) {
     else if (panel.wall === 'right') markup += `<rect class="s-hush" x="${W - thickness}" y="${panel.a0}" width="${thickness}" height="${Math.max(0.4, panel.a1 - panel.a0)}"/>`;
     else markup += `<rect class="s-hush" x="${panel.a0}" y="${D - thickness}" width="${Math.max(0.4, panel.a1 - panel.a0)}" height="${thickness}"/>`;
   });
-  if (plan.green) {
-    const green = plan.green;
-    markup += `<rect class="s-green" x="${green.x0}" y="${green.y0}" width="${green.x1 - green.x0}" height="${green.y1 - green.y0}" rx="${(green.y1 - green.y0) / 2}"/>`;
-  }
-  plan.cups.forEach((cup) => { markup += `<circle class="s-cup" cx="${cup.x}" cy="${cup.y}" r="${mode === 'sales' ? 3 : 2.2}"/>`; });
   const mat = plan.mat;
   markup += `<line class="s-center" x1="${centerX}" y1="${plan.scr.y}" x2="${centerX}" y2="${D}"/>`;
   markup += dragOpen('ball', 'Hitting mat. Drag to place the ball. Ball-to-screen and the center offset update.');
@@ -735,7 +739,6 @@ function planSVG(plan, mode) {
   markup += `<text class="s-lbl" x="${W / 2}" y="${-pad * 0.62}" text-anchor="middle" font-size="${fs}">SCREEN WALL</text>`;
   if (mode === 'sales') {
     markup += `<text class="s-lblm" x="${plan.ball.x}" y="${mat.y + mat.d + fs * 1.3}" text-anchor="middle" font-size="${fs * 0.8}">Hitting mat</text>`;
-    if (plan.green) markup += `<text class="s-lblm" x="${W / 2}" y="${(plan.green.y0 + plan.green.y1) / 2 + fs * 0.3}" text-anchor="middle" font-size="${fs * 0.75}">Putting green</text>`;
     markup += `<text class="s-lblm" x="${plan.pj.x + 14}" y="${plan.pj.y + 4}" font-size="${fs * 0.75}">Projector</text>`;
   }
   markup += dimH(0, W, -pad * 0.32, ftin(W), fs);
@@ -755,6 +758,14 @@ function planSVG(plan, mode) {
   markup += `<text class="s-lblm" x="${-pad * 0.62}" y="${D / 2}" text-anchor="middle" font-size="${fs * 0.8}" transform="rotate(-90 ${-pad * 0.62} ${D / 2})">LEFT WALL</text>`;
   markup += `<text class="s-lblm" x="${W + pad * 0.7}" y="${D / 2}" text-anchor="middle" font-size="${fs * 0.8}" transform="rotate(90 ${W + pad * 0.7} ${D / 2})">RIGHT WALL</text>`;
   markup += `<text class="s-lblm" x="${W / 2}" y="${D + pad * 0.75}" text-anchor="middle" font-size="${fs * 0.8}">REAR WALL · scale 1 sq = 1 ft</text>`;
+  plan.cups.forEach((cup, index) => {
+    const radius = mode === 'sales' ? 3.4 : 2.6;
+    markup += dragOpen('cup', `Putting cup ${index + 1}. Drag it to the spot where the cup is cut into the turf.`, `data-i="${index}"`);
+    markup += `<circle class="s-cup" cx="${cup.x}" cy="${cup.y}" r="${radius}"/>`;
+    markup += `<text class="s-cupnum" x="${cup.x + radius + fs * 0.15}" y="${cup.y + fs * 0.22}" font-size="${fs * 0.62}">${index + 1}</text>`;
+    markup += `<circle class="s-hit" cx="${cup.x}" cy="${cup.y}" r="${Math.max(11, fs * 0.9)}"/>`;
+    markup += dragClose('cup');
+  });
   const draggedPlan = guidePlace(plan, 'plan');
   if (draggedPlan) markup += planDragGuides(plan, draggedPlan, fs);
   return markup + '</svg>';
@@ -865,6 +876,11 @@ function elevSVG(plan, wall, mode) {
     markup += `<g class="s-drag" data-drag="${kind}" ${extra} aria-label="${esc(label)}"><rect class="s-hit" x="${rx}" y="${ry}" width="${Math.max(8, rw)}" height="${Math.max(8, rh)}"/></g>`;
   };
   if (wall === 'left' || wall === 'right') {
+    plan.cups.forEach((cup, index) => {
+      const cupX = U(cup.y);
+      markup += `<circle class="s-cup" cx="${cupX}" cy="${H - 4}" r="3.2"/><text class="s-cupnum" x="${cupX}" y="${H - 10}" text-anchor="middle" font-size="${fs * 0.55}">${index + 1}</text>`;
+      elevHit('cup', `Putting cup ${index + 1}. Drag it along the floor.`, cupX - 12, H - 18, 24, 18, `data-i="${index}"`);
+    });
     elevHit('ball', 'Ball. Drag toward or away from the screen. Ball-to-screen updates.', U(plan.ball.y) - 12, H - 18, 24, 18);
     elevHit('proj', 'Projector. Drag to set the throw and the mount drop.', U(plan.pj.y) - 14, Z(plan.pj.z) - 2, 28, 14);
     if (plan.lm.mount === 'ceiling' || plan.lm.type === 'radar') elevHit('lm', 'Launch monitor. Drag toward or away from the screen.', U(plan.lm.y) - 10, Z(plan.lm.z) - 2, 20, 12);
@@ -946,16 +962,6 @@ function perspectiveSVG(plan) {
   markup += `<path class="s-hill" d="M${ix0} ${iz1 + ih * 0.62} Q${ix0 + iw * 0.25} ${iz1 + ih * 0.48} ${ix0 + iw * 0.5} ${iz1 + ih * 0.58} T${ix1} ${iz1 + ih * 0.55} L${ix1} ${iz0} L${ix0} ${iz0}Z"/>`;
   markup += `<path class="s-fairway" d="M${ix0 + iw * 0.3} ${iz0} L${ix0 + iw * 0.47} ${iz1 + ih * 0.62} L${ix0 + iw * 0.55} ${iz1 + ih * 0.62} L${ix0 + iw * 0.75} ${iz0}Z"/>`;
   markup += `<line class="s-pole" x1="${ix0 + iw * 0.51}" y1="${iz1 + ih * 0.63}" x2="${ix0 + iw * 0.51}" y2="${iz1 + ih * 0.53}"/><polygon class="s-flag" points="${ix0 + iw * 0.51},${iz1 + ih * 0.53} ${ix0 + iw * 0.535},${iz1 + ih * 0.55} ${ix0 + iw * 0.51},${iz1 + ih * 0.57}"/>`;
-  if (plan.green) {
-    const green = plan.green;
-    markup += poly([[green.x0, green.y0, 0.2], [green.x1, green.y0, 0.2], [green.x1, green.y1, 0.2], [green.x0, green.y1, 0.2]], 's-green');
-  }
-  plan.cups.forEach((cup) => {
-    const [cx, cy] = project(cup.x, cup.y, 0.3);
-    const [edge] = project(cup.x + 2.2, cup.y, 0.3);
-    const rx = Math.abs(edge - cx);
-    markup += `<ellipse class="s-cup" cx="${cx}" cy="${cy}" rx="${rx}" ry="${rx * 0.35}" style="fill:var(--ink)"/>`;
-  });
   const mat = plan.mat;
   markup += poly([[mat.x, mat.y, 0.5], [mat.x + mat.w, mat.y, 0.5], [mat.x + mat.w, mat.y + mat.d, 0.5], [mat.x, mat.y + mat.d, 0.5]], 's-mat');
   markup += poly([[plan.ball.x - 6, plan.ball.y - 10, 0.7], [plan.ball.x + 6, plan.ball.y - 10, 0.7], [plan.ball.x + 6, plan.ball.y + 10, 0.7], [plan.ball.x - 6, plan.ball.y + 10, 0.7]], 's-strip');
@@ -983,6 +989,16 @@ function perspectiveSVG(plan) {
   markup += `<circle class="s-ball" cx="${ballX}" cy="${ballY}" r="${Math.max(1.5, (project(plan.ball.x + 1, plan.ball.y, 1)[0] - ballX) * 1.6)}"/>`;
   const hitPoly = (points) => `<polygon class="s-hit" points="${points.map((point) => project(...point).map((value) => value.toFixed(1)).join(',')).join(' ')}"/>`;
   const openHit = (kind, label, extra = '') => `<g class="s-drag" data-drag="${kind}" ${extra} aria-label="${esc(label)}">`;
+  plan.cups.forEach((cup, index) => {
+    const [cx, cy] = project(cup.x, cup.y, 0.4);
+    const edge = project(cup.x + 2.4, cup.y, 0.4)[0];
+    const rx = Math.max(2.5, Math.abs(edge - cx));
+    markup += `<ellipse class="s-cup" cx="${cx}" cy="${cy}" rx="${rx}" ry="${rx * 0.4}" style="fill:var(--ink)"/>`;
+    markup += `<text class="s-cupnum" x="${cx + rx * 1.8}" y="${cy}" dominant-baseline="middle" font-size="${Math.max(11, rx * 1.6)}">${index + 1}</text>`;
+    markup += openHit('cup', `Putting cup ${index + 1}. Drag it to the spot where the cup is cut into the turf.`, `data-i="${index}" data-plane="floor"`);
+    markup += `<circle class="s-hit" cx="${cx}" cy="${cy}" r="${Math.max(16, rx * 3.5)}"/>`;
+    markup += '</g>';
+  });
   markup += openHit('ball', 'Hitting mat. Drag to place the ball. Ball-to-screen and the center offset update.', 'data-plane="floor"');
   markup += hitPoly([[mat.x, mat.y, 0.5], [mat.x + mat.w, mat.y, 0.5], [mat.x + mat.w, mat.y + mat.d, 0.5], [mat.x, mat.y + mat.d, 0.5]]);
   markup += '</g>';
@@ -1035,7 +1051,7 @@ function placements(plan) {
   add('Hitting mat' + (spec.matCutout ? ' (flush inset)' : ''), plan.mat.x, plan.mat.y, 0, 'Floor', `${plan.mat.name}. Corner dims are the mat's left-front corner${spec.matCutout ? '. Cut turf and subfloor to mat size plus 1/8 in.' : ''}.`, plan.mat.x, plan.mat.y);
   add('Launch monitor — ' + plan.lm.name, r1(plan.lm.x), r1(plan.lm.y), plan.lm.mount === 'ceiling' ? ftin(plan.lm.z) + ' (to unit)' : 'Floor', plan.lm.mount === 'ceiling' ? 'Ceiling' : 'Floor', plan.lm.note + ' Positions are planning values. Final aim follows the manufacturer.');
   add('Projector (lens)', r1(plan.pj.x), r1(plan.pj.y), ftin(plan.pj.z), 'Ceiling', `Throw ${ftin(plan.pj.throwD)} at TR ${plan.pj.tr}. Image ${ftin(plan.img.w)} wide. Verify lens offset with the manufacturer calculator.`);
-  if (plan.green) plan.cups.forEach((cup, index) => add(`Putting cup ${index + 1}`, r1(cup.x), r1(cup.y), 0, 'Floor', '4¼ in hole. Set the cup ½ in below the turf.'));
+  plan.cups.forEach((cup, index) => add(`Putting cup ${index + 1}`, r1(cup.x), r1(cup.y), 0, 'Cut into the turf', '4¼ in hole. Set the cup ½ in below the turf at the placed mark.'));
   const cabinetPoint = wallXY(plan.cab.wall, plan.cab.a, plan.W, plan.D);
   add('Computer cabinet', r1(cabinetPoint.x), r1(cabinetPoint.y), ftin(plan.cab.h) + ' top', cap(plan.cab.wall) + ' wall', `Center on the wall point. ${ftin(plan.cab.w)} wide × ${ftin(plan.cab.d)} deep.`);
   if (plan.mon) {
@@ -1072,7 +1088,7 @@ function steps(plan) {
   if (plan.panels.length) list.push(['panels', 'Install HUSH panels', `${plan.panels.length} nominal 2×2 ft panels. Side and rear walls run from the floor to the ceiling. Ceiling tiles start at the screen line and run back ${ftin(plan.run)}, with a gap so each panel stays separate.`]);
   list.push(['screen', 'Hang the screen frame and impact screen', 'Fasten to B1–B3 backing. Tension evenly. Check the projected area for wrinkles.']);
   list.push(['turf', 'Lay turf' + (spec.matCutout ? ' and cut the mat inset' : ''), spec.matCutout ? 'Cut the inset to mat size plus 1/8 in. Mat surface sits flush with the turf.' : 'Keep seams away from the hitting area.']);
-  if (plan.cups.length) list.push(['cups', 'Cut and set putting cups', `${plan.cups.length} cups per the schedule.`]);
+  if (plan.cups.length) list.push(['cups', 'Cut and set putting cups', `${plan.cups.length} cup${plan.cups.length === 1 ? '' : 's'} cut into the turf at the placed marks.`]);
   list.push(['lm', 'Mount the launch monitor', plan.lm.mount === 'ceiling' ? 'Bolt to B5. Level it and aim at the hitting area per the manufacturer.' : 'Set the unit on the marked spot. Route power and data from the floor box.']);
   list.push(['proj', 'Mount the projector', `Lens at ${ftin(plan.pj.y)} from the back wall. Square to the screen, keystone off, filling an image ${ftin(plan.img.w)} wide.`]);
   list.push(['pc', 'Set the computer and pull cables', 'Run HDMI, USB, and Cat6 through the tubes. Label both ends.']);
@@ -1129,7 +1145,7 @@ const FORM = [
   ]],
   ['Turf, mat & putting', [
     ['s.turf', 'Turf', 'select', { opts: [['full', 'Full room'], ['bay', 'Hitting bay only']] }],
-    ['s.cups', 'Putting cups', 'select', { opts: [['0', '0'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']] }],
+    ['s.cups', 'Putting cups', 'select', { opts: [['0', '0'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']], hint: 'Drag each cup on the drawing' }],
     ['s.mat', 'Hitting mat', 'select', { opts: MATS.map((item) => [item.id, item.name]), full: 1 }],
     ['s.matCutout', 'Flush mat cutout', 'checks', { opts: ['yes'], full: 1 }],
   ]],
@@ -1162,7 +1178,7 @@ function buildForm() {
       } else {
         html += `<input id="${id}" data-p="${path}" type="${type}" autocomplete="off" ${type === 'number' ? `step="${options.step || 'any'}"` : ''}>`;
       }
-      if (options.hint) html += `<span class="hint" id="${id}_h"></span>`;
+      if (options.hint) html += `<span class="hint" id="${id}_h">${typeof options.hint === 'string' ? esc(options.hint) : ''}</span>`;
       html += '</div>';
     });
     html += '</div></details>';
@@ -1322,7 +1338,7 @@ function salesHTML(plan) {
   <div class="panel"><div class="panel-h"><h2>Client visual</h2><span class="savestate">View from behind the hitting area · ${esc(plan.lm.name)} · ${esc(plan.pj.name.split(' (')[0])} · ${plan.panels.length} HUSH 2×2 panels</span></div><div class="panel-b"><div class="drawing">${perspectiveSVG(plan)}</div><p class="savestate" style="margin-top:8px">Click an item to show its distance from the impact screen, the walls, and the floor. The lines follow it while you drag, and they clear when you click the drawing background.</p></div></div>
   <div class="grid2">
     <div class="panel"><div class="panel-h"><h2>Floor plan</h2></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'sales')}</div>
-      <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:#2c312f"></i>HUSH panel</span><span><i class="sw" style="background:var(--turf);opacity:.5"></i>Turf</span><span><i class="sw" style="background:var(--green)"></i>Putting green</span><span><i class="sw" style="border:1px dashed var(--warn)"></i>Swing radius</span><span><i class="sw" style="background:var(--cad);opacity:.25"></i>Projector throw</span></div>
+      <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:#2c312f"></i>HUSH panel</span><span><i class="sw" style="background:var(--turf);opacity:.5"></i>Turf</span><span><i class="sw" style="background:var(--surface);border:1px solid var(--ink);border-radius:50%"></i>Putting cup</span><span><i class="sw" style="border:1px dashed var(--warn)"></i>Swing radius</span><span><i class="sw" style="background:var(--cad);opacity:.25"></i>Projector throw</span></div>
       <p class="savestate" style="margin-top:8px">Click an item to show its distance from the impact screen, each side wall, and the floor. Drag it to update the layout. Click the drawing background to clear the lines.</p></div></div>
     <div class="panel"><div class="panel-h"><h2>Space check</h2>${fitPill(plan.fit)}</div><div class="panel-b">${checksHTML(plan)}<p class="savestate" style="margin-top:10px">Clearances are planning rules of thumb. Confirm with a swing test and the manufacturer's install specs before ordering.</p></div></div>
   </div>
@@ -1746,6 +1762,11 @@ function dragPlace(drag, plan) {
     const point = wallXY(tv.wall, tv.a, plan.W, plan.D);
     return { name: `TV ${+drag.index + 1} · ${tv.size}"`, x: point.x, y: point.y, z: tv.z };
   }
+  if (drag.kind === 'cup') {
+    const cup = plan.cups[+drag.index];
+    if (!cup) return null;
+    return { name: `Cup ${+drag.index + 1}`, x: cup.x, y: cup.y, z: 0 };
+  }
   if (drag.kind === 'mon' && plan.mon) {
     const point = wallXY(plan.mon.wall, plan.mon.a, plan.W, plan.D);
     return { name: 'Monitor', x: point.x, y: point.y, z: plan.mon.z };
@@ -1857,6 +1878,17 @@ function applyDrag(drag, point, svg) {
       const height = width / 0.872 * 0.49;
       item.z = Math.round(clampNum(z, height / 2 + 6, plan.H - height / 2 - 6));
     }
+  } else if (drag.kind === 'cup') {
+    const cup = plan.cups[+drag.index];
+    if (!cup) return;
+    if (!Array.isArray(spec.cupPos)) spec.cupPos = [];
+    const sideOnly = drag.view === 'elev' && (drag.wall === 'left' || drag.wall === 'right');
+    const nextX = sideOnly ? cup.x : x;
+    const nextY = drag.view === 'elev' && (drag.wall === 'screen' || drag.wall === 'rear') ? cup.y : y;
+    spec.cupPos[+drag.index] = {
+      x: Math.round(clampNum(nextX, 10, plan.W - 10)),
+      y: Math.round(clampNum(nextY, plan.scr.y + 8, plan.D - 10)),
+    };
   } else if (drag.kind === 'mon' && plan.mon) {
     const along = plan.mon.wall === 'rear' ? x : y;
     spec.monAlong = Math.round(clampNum(along, 12, plan.mon.wall === 'rear' ? plan.W - 12 : plan.D - 12));
