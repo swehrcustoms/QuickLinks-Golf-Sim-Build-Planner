@@ -62,7 +62,7 @@ const DEFAULT_SPEC = {
   lm: 'uneekor-xo2', lmAdj: 0, software: 'gspro',
   proj: 'st4k', tr: 0.81, projDrop: 8,
   compWall: 'rear', compPos: 24, monitor: 'wall', monZ: 48, tvCount: 1, tvWall: 'left', tvSize: 65, tvH: 66,
-  turf: 'full', mat: 'm55', matCutout: true, cups: 2,
+  turf: 'full', mat: 'm55', matCutout: true, cups: 2, soffitCount: 0,
 };
 
 const STATUSES = ['Lead', 'Quoted', 'Sold', 'Rough-in', 'Install', 'Complete'];
@@ -129,6 +129,63 @@ function hdmiFor(ft) {
 }
 
 function cap(value) { return value ? value[0].toUpperCase() + value.slice(1) : ''; }
+
+function soffitWhere(face) {
+  return { left: 'Left wall', right: 'Right wall', ceiling: 'Ceiling', screen: 'Screen wall' }[face] || 'Ceiling';
+}
+
+function ensureSoffits(sp) {
+  const count = Math.max(0, Math.min(6, Math.round(+sp.soffitCount || 0)));
+  sp.soffitCount = count;
+  if (!Array.isArray(sp.soffits)) sp.soffits = [];
+  for (let i = 0; i < count; i += 1) {
+    if (!sp.soffits[i] || typeof sp.soffits[i] !== 'object') {
+      sp.soffits[i] = { face: 'ceiling', span: 48, proj: 24, drop: 12, pos: '', posY: '' };
+    } else if (!['left', 'right', 'ceiling', 'screen'].includes(sp.soffits[i].face)) {
+      sp.soffits[i].face = 'ceiling';
+    }
+  }
+}
+
+function layoutSoffits(sp, W, D, H) {
+  ensureSoffits(sp);
+  const saved = (value) => value !== '' && value != null && Number.isFinite(+value);
+  const soffits = [];
+  for (let i = 0; i < sp.soffitCount; i += 1) {
+    const item = sp.soffits[i];
+    const face = item.face;
+    const spanMax = face === 'left' || face === 'right' ? D : W;
+    const span = clampNum(+item.span || 48, 6, Math.max(6, spanMax));
+    const proj = clampNum(+item.proj || (face === 'ceiling' ? 24 : 12), 2, Math.max(2, face === 'ceiling' ? D : (face === 'screen' ? D : W) - 6));
+    const drop = clampNum(+item.drop || 12, 2, Math.max(2, H - 6));
+    let x0;
+    let x1;
+    let y0;
+    let y1;
+    if (face === 'left' || face === 'right') {
+      const cy = clampNum(saved(item.pos) ? +item.pos : Math.max(span / 2, D - span / 2 - 12), span / 2, Math.max(span / 2, D - span / 2));
+      y0 = cy - span / 2;
+      y1 = cy + span / 2;
+      if (face === 'left') { x0 = 0; x1 = proj; }
+      else { x1 = W; x0 = W - proj; }
+    } else if (face === 'screen') {
+      const cx = clampNum(saved(item.pos) ? +item.pos : W / 2, span / 2, Math.max(span / 2, W - span / 2));
+      x0 = cx - span / 2;
+      x1 = cx + span / 2;
+      y0 = 0;
+      y1 = proj;
+    } else {
+      const cx = clampNum(saved(item.pos) ? +item.pos : W / 2, span / 2, Math.max(span / 2, W - span / 2));
+      const cy = clampNum(saved(item.posY) ? +item.posY : Math.max(proj / 2, D - proj / 2 - 12), proj / 2, Math.max(proj / 2, D - proj / 2));
+      x0 = cx - span / 2;
+      x1 = cx + span / 2;
+      y0 = cy - proj / 2;
+      y1 = cy + proj / 2;
+    }
+    soffits.push({ face, x0, x1, y0, y1, z0: H - drop, z1: H, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, drop });
+  }
+  return soffits;
+}
 
 function ensureTvs(sp) {
   const count = Math.max(0, Math.min(3, +sp.tvCount || 0));
@@ -360,6 +417,22 @@ function compute(sp) {
       y: Math.min(cupMaxY, Math.max(cupMinY, cupY)),
     });
   }
+  const soffits = layoutSoffits(sp, W, D, H);
+  const coversPoint = (s, px, py) => px >= s.x0 && px <= s.x1 && py >= s.y0 && py <= s.y1;
+  soffits.forEach((s, index) => {
+    const name = `Soffit ${index + 1}`;
+    const where = soffitWhere(s.face).toLowerCase();
+    const nx = Math.min(s.x1, Math.max(s.x0, ball.x));
+    const ny = Math.min(s.y1, Math.max(s.y0, ball.y));
+    if (Math.hypot(ball.x - nx, ball.y - ny) < swingR && s.z0 < needH) {
+      chk.push(['warn', `${name} on the ${where} drops to ${ftin(s.z0)} above the floor inside the swing area (~${ftin(needH)} needed).`]);
+    }
+    if (s.y0 <= scr.y && s.y1 >= scr.y && s.x1 > scr.x0 && s.x0 < scr.x1 && s.z0 < scr.z1) {
+      chk.push(['warn', `${name} crosses the impact screen. Move the screen or the soffit.`]);
+    }
+    if (coversPoint(s, pj.x, pj.y) && s.z0 < pj.z + 2) chk.push(['bad', `${name} covers the projector. Move the soffit or change the throw.`]);
+    if (lm.mount === 'ceiling' && coversPoint(s, lm.x, lm.y) && s.z0 < lm.z) chk.push(['warn', `${name} covers the overhead launch monitor.`]);
+  });
   const nofix = { x: ball.x, y: ball.y, r: swingR + 12 };
 
   const backing = [];
@@ -424,7 +497,7 @@ function compute(sp) {
   if (mon && !mon.onCab) addTube('T6', 'Monitor → computer', wallXY(mon.wall, mon.a, W, D), mon.z, 'wall');
 
   const fit = chk.some((item) => item[0] === 'bad') ? 'bad' : chk.some((item) => item[0] === 'warn') ? 'warn' : 'good';
-  return { W, D, H, scr, img, ball, golfers, swingR, mat, lm, pj, panels, cab, mon, tvs, turfArea, cutArea, green, cups, nofix, backing, elec, data, tubes, chk, fit, run, needH };
+  return { W, D, H, scr, img, ball, golfers, swingR, mat, lm, pj, panels, cab, mon, tvs, turfArea, cutArea, green, cups, soffits, nofix, backing, elec, data, tubes, chk, fit, run, needH };
 }
 
 function quote(sp, plan, pb) {
@@ -758,6 +831,29 @@ function planSVG(plan, mode) {
   markup += `<text class="s-lblm" x="${-pad * 0.62}" y="${D / 2}" text-anchor="middle" font-size="${fs * 0.8}" transform="rotate(-90 ${-pad * 0.62} ${D / 2})">LEFT WALL</text>`;
   markup += `<text class="s-lblm" x="${W + pad * 0.7}" y="${D / 2}" text-anchor="middle" font-size="${fs * 0.8}" transform="rotate(90 ${W + pad * 0.7} ${D / 2})">RIGHT WALL</text>`;
   markup += `<text class="s-lblm" x="${W / 2}" y="${D + pad * 0.75}" text-anchor="middle" font-size="${fs * 0.8}">REAR WALL · scale 1 sq = 1 ft</text>`;
+  plan.soffits.forEach((s, index) => {
+    const where = soffitWhere(s.face).toLowerCase();
+    let x0 = s.x0;
+    let y0 = s.y0;
+    let x1 = s.x1;
+    let y1 = s.y1;
+    if (s.face === 'left') x1 = Math.max(x1, x0 + 16);
+    else if (s.face === 'right') x0 = Math.min(x0, x1 - 16);
+    else if (s.face === 'screen') y1 = Math.max(y1, y0 + 16);
+    if (x1 - x0 < 16) { const mid = (x0 + x1) / 2; x0 = mid - 8; x1 = mid + 8; }
+    if (y1 - y0 < 16) { const mid = (y0 + y1) / 2; y0 = mid - 8; y1 = mid + 8; }
+    let tx = s.cx;
+    let ty = s.cy;
+    let anchor = 'middle';
+    if (s.face === 'left') { tx = s.x1 + fs * 0.35; anchor = 'start'; }
+    else if (s.face === 'right') { tx = s.x0 - fs * 0.35; anchor = 'end'; }
+    else if (s.face === 'screen') ty = Math.max(s.y1 + fs * 0.55, s.cy);
+    markup += dragOpen('soffit', `Soffit ${index + 1}. Drag it along the ${where}. The size stays as entered.`, `data-i="${index}"`);
+    markup += `<rect class="s-soffit" x="${s.x0}" y="${s.y0}" width="${Math.max(1, s.x1 - s.x0)}" height="${Math.max(1, s.y1 - s.y0)}"/>`;
+    markup += `<text class="s-soffitnum" x="${tx}" y="${ty}" text-anchor="${anchor}" dominant-baseline="middle" font-size="${fs * 0.7}">${index + 1}</text>`;
+    markup += `<rect class="s-hit" x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}"/>`;
+    markup += dragClose('soffit');
+  });
   plan.cups.forEach((cup, index) => {
     const radius = mode === 'sales' ? 3.4 : 2.6;
     markup += dragOpen('cup', `Putting cup ${index + 1}. Drag it to the spot where the cup is cut into the turf.`, `data-i="${index}"`);
@@ -769,6 +865,33 @@ function planSVG(plan, mode) {
   const draggedPlan = guidePlace(plan, 'plan');
   if (draggedPlan) markup += planDragGuides(plan, draggedPlan, fs);
   return markup + '</svg>';
+}
+
+function soffitElevBands(plan, wall) {
+  const bands = [];
+  (plan.soffits || []).forEach((s, index) => {
+    let a0 = null;
+    let a1 = null;
+    let drag = false;
+    if (s.face === 'ceiling') {
+      if (wall === 'screen' || wall === 'rear') { a0 = s.x0; a1 = s.x1; }
+      else { a0 = s.y0; a1 = s.y1; }
+      drag = true;
+    } else if (s.face === wall && wall !== 'rear') {
+      a0 = wall === 'left' || wall === 'right' ? s.y0 : s.x0;
+      a1 = wall === 'left' || wall === 'right' ? s.y1 : s.x1;
+      drag = true;
+    } else if ((wall === 'left' || wall === 'right') && s.face === 'screen') {
+      a0 = s.y0;
+      a1 = s.y1;
+    } else if (wall === 'screen' && (s.face === 'left' || s.face === 'right')) {
+      a0 = s.x0;
+      a1 = s.x1;
+    }
+    if (a0 == null) return;
+    bands.push({ index, a0, a1, z0: s.z0, z1: s.z1, drag, face: s.face });
+  });
+  return bands;
 }
 
 function elevSVG(plan, wall, mode) {
@@ -898,6 +1021,13 @@ function elevSVG(plan, wall, mode) {
     const monX = U(plan.mon.a);
     elevHit('mon', 'Monitor. Drag along the wall or up and down. Position and height update.', monX - plan.mon.w / 2, Z(plan.mon.z + plan.mon.h / 2), plan.mon.w, plan.mon.h);
   }
+  soffitElevBands(plan, wall).forEach((band) => {
+    const x0 = Math.min(U(band.a0), U(band.a1));
+    const x1 = Math.max(U(band.a0), U(band.a1));
+    markup += `<rect class="s-soffit" x="${x0}" y="${Z(band.z1)}" width="${Math.max(1, x1 - x0)}" height="${Math.max(1, band.z1 - band.z0)}"/>`;
+    markup += `<text class="s-soffitnum" x="${(x0 + x1) / 2}" y="${Z((band.z0 + band.z1) / 2)}" text-anchor="middle" dominant-baseline="middle" font-size="${fs * 0.62}">${band.index + 1}</text>`;
+    if (band.drag) elevHit('soffit', `Soffit ${band.index + 1}. Drag it along the ${soffitWhere(band.face).toLowerCase()}. The size stays as entered.`, x0, Z(band.z1), Math.max(16, x1 - x0), Math.max(12, band.z1 - band.z0), `data-i="${band.index}"`);
+  });
   markup += `<line class="s-wall" x1="0" y1="${H}" x2="${len}" y2="${H}"/><rect class="s-wallthin" x="0" y="0" width="${len}" height="${H}"/>`;
   markup += dimH(0, len, -pad * 0.35, ftin(len), fs);
   markup += dimV(0, H, len + pad * 0.35, ftin(H) + ' clg', fs);
@@ -985,6 +1115,16 @@ function perspectiveSVG(plan) {
     const [bodyX, bodyY] = project(projector.x, projector.y, projector.z - 7);
     markup += `<line class="s-pole" x1="${mountX}" y1="${mountY}" x2="${bodyX}" y2="${bodyY}" style="stroke-width:2"/>`;
   }
+  plan.soffits.forEach((s, index) => {
+    const bottom = [[s.x0, s.y0, s.z0], [s.x1, s.y0, s.z0], [s.x1, s.y1, s.z0], [s.x0, s.y1, s.z0]];
+    const front = [[s.x0, s.y1, s.z0], [s.x1, s.y1, s.z0], [s.x1, s.y1, s.z1], [s.x0, s.y1, s.z1]];
+    markup += poly(bottom, 's-soffit');
+    markup += poly(front, 's-soffit');
+    if (s.face === 'left') markup += poly([[s.x1, s.y0, s.z0], [s.x1, s.y1, s.z0], [s.x1, s.y1, s.z1], [s.x1, s.y0, s.z1]], 's-soffit');
+    if (s.face === 'right') markup += poly([[s.x0, s.y0, s.z0], [s.x0, s.y1, s.z0], [s.x0, s.y1, s.z1], [s.x0, s.y0, s.z1]], 's-soffit');
+    const [lx, ly] = project(s.cx, s.cy, s.z0);
+    markup += `<text class="s-soffitnum" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="${Math.max(11, (maxX - minX) / 34)}">${index + 1}</text>`;
+  });
   const [ballX, ballY] = project(plan.ball.x, plan.ball.y, 1);
   markup += `<circle class="s-ball" cx="${ballX}" cy="${ballY}" r="${Math.max(1.5, (project(plan.ball.x + 1, plan.ball.y, 1)[0] - ballX) * 1.6)}"/>`;
   const hitPoly = (points) => `<polygon class="s-hit" points="${points.map((point) => project(...point).map((value) => value.toFixed(1)).join(',')).join(' ')}"/>`;
@@ -1036,6 +1176,28 @@ function perspectiveSVG(plan) {
     markup += hitPoly([[x, plan.mon.a - plan.mon.w / 2, plan.mon.z - plan.mon.h / 2], [x, plan.mon.a + plan.mon.w / 2, plan.mon.z - plan.mon.h / 2], [x, plan.mon.a + plan.mon.w / 2, plan.mon.z + plan.mon.h / 2], [x, plan.mon.a - plan.mon.w / 2, plan.mon.z + plan.mon.h / 2]]);
     markup += '</g>';
   }
+  plan.soffits.forEach((s, index) => {
+    const where = soffitWhere(s.face).toLowerCase();
+    let extra = `data-i="${index}"`;
+    const faces = [];
+    if (s.face === 'ceiling') {
+      extra += ` data-plane="level" data-zval="${s.z0}"`;
+      faces.push([[s.x0, s.y0, s.z0], [s.x1, s.y0, s.z0], [s.x1, s.y1, s.z0], [s.x0, s.y1, s.z0]]);
+      faces.push([[s.x0, s.y1, s.z0], [s.x1, s.y1, s.z0], [s.x1, s.y1, s.z1], [s.x0, s.y1, s.z1]]);
+    } else if (s.face === 'left') {
+      extra += ` data-plane="x" data-xval="${s.x1}"`;
+      faces.push([[s.x1, s.y0, s.z0], [s.x1, s.y1, s.z0], [s.x1, s.y1, s.z1], [s.x1, s.y0, s.z1]]);
+    } else if (s.face === 'right') {
+      extra += ` data-plane="x" data-xval="${s.x0}"`;
+      faces.push([[s.x0, s.y0, s.z0], [s.x0, s.y1, s.z0], [s.x0, s.y1, s.z1], [s.x0, s.y0, s.z1]]);
+    } else {
+      extra += ` data-plane="y" data-yval="${s.y1}"`;
+      faces.push([[s.x0, s.y1, s.z0], [s.x1, s.y1, s.z0], [s.x1, s.y1, s.z1], [s.x0, s.y1, s.z1]]);
+    }
+    markup += openHit('soffit', `Soffit ${index + 1}. Drag it along the ${where}. The size stays as entered.`, extra);
+    faces.forEach((points) => { markup += hitPoly(points); });
+    markup += '</g>';
+  });
   const viewW = Math.max(40, maxX - minX);
   const draggedPersp = guidePlace(plan, 'persp');
   if (draggedPersp) markup += perspDragGuides(plan, draggedPersp, project, viewW / 28);
@@ -1052,6 +1214,7 @@ function placements(plan) {
   add('Launch monitor — ' + plan.lm.name, r1(plan.lm.x), r1(plan.lm.y), plan.lm.mount === 'ceiling' ? ftin(plan.lm.z) + ' (to unit)' : 'Floor', plan.lm.mount === 'ceiling' ? 'Ceiling' : 'Floor', plan.lm.note + ' Positions are planning values. Final aim follows the manufacturer.');
   add('Projector (lens)', r1(plan.pj.x), r1(plan.pj.y), ftin(plan.pj.z), 'Ceiling', `Throw ${ftin(plan.pj.throwD)} at TR ${plan.pj.tr}. Image ${ftin(plan.img.w)} wide. Verify lens offset with the manufacturer calculator.`);
   plan.cups.forEach((cup, index) => add(`Putting cup ${index + 1}`, r1(cup.x), r1(cup.y), 0, 'Cut into the turf', '4¼ in hole. Set the cup ½ in below the turf at the placed mark.'));
+  plan.soffits.forEach((s, index) => add(`Existing soffit ${index + 1}`, r1(s.x0), r1(s.y0), `${ftin(s.z0)}–${ftin(s.z1)}`, soffitWhere(s.face), `Fixed bulkhead, ${ftin(s.x1 - s.x0)} × ${ftin(s.y1 - s.y0)}, bottom ${ftin(s.z0)} above the floor. Work around it.`, s.cx, s.cy));
   const cabinetPoint = wallXY(plan.cab.wall, plan.cab.a, plan.W, plan.D);
   add('Computer cabinet', r1(cabinetPoint.x), r1(cabinetPoint.y), ftin(plan.cab.h) + ' top', cap(plan.cab.wall) + ' wall', `Center on the wall point. ${ftin(plan.cab.w)} wide × ${ftin(plan.cab.d)} deep.`);
   if (plan.mon) {
@@ -1085,6 +1248,7 @@ function steps(plan) {
     ['verify', 'Verify rough-in against the builder sheet', 'Backing, receptacles, Cat6, and tech tubes are in place. Photograph each before panels go up.'],
     ['layout', 'Snap layout lines', 'Screen line, target line, ball center, mat outline, projector, and launch-monitor points from the schedule.'],
   ];
+  if (plan.soffits.length) list.splice(2, 0, ['soffit', 'Confirm the existing soffits', `${plan.soffits.length} soffit${plan.soffits.length === 1 ? '' : 's'} are drawn on the plan. Measure each one before panels and the screen go up.`]);
   if (plan.panels.length) list.push(['panels', 'Install HUSH panels', `${plan.panels.length} nominal 2×2 ft panels. Side and rear walls run from the floor to the ceiling. Ceiling tiles start at the screen line and run back ${ftin(plan.run)}, with a gap so each panel stays separate.`]);
   list.push(['screen', 'Hang the screen frame and impact screen', 'Fasten to B1–B3 backing. Tension evenly. Check the projected area for wrinkles.']);
   list.push(['turf', 'Lay turf' + (spec.matCutout ? ' and cut the mat inset' : ''), spec.matCutout ? 'Cut the inset to mat size plus 1/8 in. Mat surface sits flush with the turf.' : 'Keep seams away from the hitting area.']);
@@ -1117,6 +1281,9 @@ const FORM = [
     ['s.teeDist', 'Ball to screen (in)', 'number', { hint: 1 }],
     ['s.ballX', 'Ball offset from center (in, + = right)', 'number', { full: 1 }],
   ]],
+  ['Soffits', [
+    ['s.soffitCount', 'Soffits', 'select', { opts: [['0', '0'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5'], ['6', '6']], full: 1, hint: 'Existing bulkheads stay on the surface you pick. Set the size, then drag each one on the drawing.' }],
+  ], true],
   ['Screen & HUSH panels', [
     ['s.screenOffset', 'Screen off back wall (in)', 'number'],
     ['s.sideTrim', 'Side trim each side (in)', 'number'],
@@ -1183,6 +1350,7 @@ function buildForm() {
     });
     html += '</div></details>';
     if (title.startsWith('Computer')) html = html.replace(/<\/div><\/details>$/, '<div class="tvrows" id="tvRows"></div></div></details>');
+    if (title === 'Soffits') html = html.replace(/<\/div><\/details>$/, '<div class="soffitrows" id="soffitRows"></div></div></details>');
   });
   html += '<details><summary><h3>Notes</h3></summary><div class="fields"><div class="f full"><label for="f_notes">Job notes</label><textarea id="f_notes" data-p="notes" rows="4"></textarea></div></div></details>';
   $('#spec').innerHTML = html;
@@ -1200,6 +1368,7 @@ function fillForm() {
   });
   updateHints();
   syncTvRows();
+  syncSoffitRows();
 }
 
 function updateHints() {
@@ -1233,6 +1402,40 @@ function syncTvRows() {
   });
 }
 
+function syncSoffitRows() {
+  const host = document.getElementById('soffitRows');
+  if (!host || !S.job) return;
+  ensureSoffits(S.job.spec);
+  const items = S.job.spec.soffits.slice(0, S.job.spec.soffitCount);
+  const sig = items.map((item) => item.face || 'ceiling').join(',');
+  if (host.dataset.sig !== sig) {
+    host.dataset.sig = sig;
+    host.innerHTML = items.map((item, index) => {
+      const ceiling = item.face === 'ceiling';
+      return `<div class="tv-card"><b>Soffit ${index + 1}</b><div class="fields tv-fields">
+        <div class="f full"><label for="soffit_${index}_face">Surface</label><select id="soffit_${index}_face" data-soffit="${index}" data-k="face"><option value="left">Left wall</option><option value="right">Right wall</option><option value="ceiling">Ceiling</option><option value="screen">Screen wall</option></select></div>
+        <div class="f"><label for="soffit_${index}_span">${ceiling ? 'Width across room (in)' : 'Length along wall (in)'}</label><input id="soffit_${index}_span" data-soffit="${index}" data-k="span" type="number" min="6" step="1"><span class="hint" id="soffit_${index}_spanh"></span></div>
+        <div class="f"><label for="soffit_${index}_proj">${ceiling ? 'Depth along room (in)' : 'Projection into room (in)'}</label><input id="soffit_${index}_proj" data-soffit="${index}" data-k="proj" type="number" min="2" step="1"><span class="hint" id="soffit_${index}_projh"></span></div>
+        <div class="f"><label for="soffit_${index}_drop">Drop from ceiling (in)</label><input id="soffit_${index}_drop" data-soffit="${index}" data-k="drop" type="number" min="2" step="1"><span class="hint" id="soffit_${index}_droph"></span></div>
+      </div></div>`;
+    }).join('');
+  }
+  host.querySelectorAll('[data-soffit]').forEach((el) => {
+    if (document.activeElement === el) return;
+    const item = items[+el.dataset.soffit];
+    if (!item) return;
+    el.value = item[el.dataset.k] ?? '';
+  });
+  items.forEach((item, index) => {
+    const span = document.getElementById(`soffit_${index}_spanh`);
+    const proj = document.getElementById(`soffit_${index}_projh`);
+    const drop = document.getElementById(`soffit_${index}_droph`);
+    if (span) span.textContent = ftin(+item.span || 0);
+    if (proj) proj.textContent = ftin(+item.proj || 0);
+    if (drop) drop.textContent = ftin(+item.drop || 0);
+  });
+}
+
 function onField(event) {
   const el = event.target;
   if (el.dataset.tv != null) {
@@ -1244,6 +1447,19 @@ function onField(event) {
       tv.pos = '';
     } else tv[el.dataset.k] = el.value === '' ? '' : +el.value;
     updateHints();
+    markDirty();
+    scheduleRender();
+    return;
+  }
+  if (el.dataset.soffit != null) {
+    ensureSoffits(S.job.spec);
+    const item = S.job.spec.soffits[+el.dataset.soffit];
+    if (!item) return;
+    if (el.dataset.k === 'face') {
+      item.face = ['left', 'right', 'ceiling', 'screen'].includes(el.value) ? el.value : 'ceiling';
+      item.pos = '';
+      item.posY = '';
+    } else item[el.dataset.k] = el.value === '' ? '' : +el.value;
     markDirty();
     scheduleRender();
     return;
@@ -1267,8 +1483,9 @@ function onField(event) {
     const ratio = $('#f_s_tr');
     if (ratio) ratio.value = S.job.spec.tr;
   }
-  if (path === 's.tvCount' || path === 's.cups') S.job.spec[path.slice(2)] = +value;
+  if (path === 's.tvCount' || path === 's.cups' || path === 's.soffitCount') S.job.spec[path.slice(2)] = +value;
   if (path === 's.tvCount') ensureTvs(S.job.spec);
+  if (path === 's.soffitCount') ensureSoffits(S.job.spec);
   if (path === 's.monitor' || path === 's.handed') delete S.job.spec.monAlong;
   if (path === 's.compWall') S.job.spec.compPos = 24;
   updateHints();
@@ -1335,10 +1552,10 @@ function salesHTML(plan) {
     <div class="stat"><div class="k">Image</div><div class="v">${ftin(plan.img.w)} × ${ftin(plan.img.h)}</div></div>
     <div class="stat"><div class="k">Estimate</div><div class="v">${money(priced.total)}</div></div>
   </div>
-  <div class="panel"><div class="panel-h"><h2>Client visual</h2><span class="savestate">View from behind the hitting area · ${esc(plan.lm.name)} · ${esc(plan.pj.name.split(' (')[0])} · ${plan.panels.length} HUSH 2×2 panels</span></div><div class="panel-b"><div class="drawing">${perspectiveSVG(plan)}</div><p class="savestate" style="margin-top:8px">Click an item to show its distance from the impact screen, the walls, and the floor. The lines follow it while you drag, and they clear when you click the drawing background.</p></div></div>
+  <div class="panel"><div class="panel-h"><h2>Client visual</h2><span class="savestate">View from behind the hitting area · ${esc(plan.lm.name)} · ${esc(plan.pj.name.split(' (')[0])} · ${plan.panels.length} HUSH 2×2 panels${plan.soffits.length ? ` · ${plan.soffits.length} soffit${plan.soffits.length === 1 ? '' : 's'}` : ''}</span></div><div class="panel-b"><div class="drawing">${perspectiveSVG(plan)}</div><p class="savestate" style="margin-top:8px">Click an item to show its distance from the impact screen, the walls, and the floor. The lines follow it while you drag, and they clear when you click the drawing background.</p></div></div>
   <div class="grid2">
     <div class="panel"><div class="panel-h"><h2>Floor plan</h2></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'sales')}</div>
-      <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:#2c312f"></i>HUSH panel</span><span><i class="sw" style="background:var(--turf);opacity:.5"></i>Turf</span><span><i class="sw" style="background:var(--surface);border:1px solid var(--ink);border-radius:50%"></i>Putting cup</span><span><i class="sw" style="border:1px dashed var(--warn)"></i>Swing radius</span><span><i class="sw" style="background:var(--cad);opacity:.25"></i>Projector throw</span></div>
+      <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:#2c312f"></i>HUSH panel</span><span><i class="sw" style="background:var(--turf);opacity:.5"></i>Turf</span><span><i class="sw" style="background:var(--surface);border:1px solid var(--ink);border-radius:50%"></i>Putting cup</span><span><i class="sw" style="background:var(--warn-soft);border:1px dashed var(--warn)"></i>Soffit</span><span><i class="sw" style="border:1px dashed var(--warn)"></i>Swing radius</span><span><i class="sw" style="background:var(--cad);opacity:.25"></i>Projector throw</span></div>
       <p class="savestate" style="margin-top:8px">Click an item to show its distance from the impact screen, each side wall, and the floor. Drag it to update the layout. Click the drawing background to clear the lines.</p></div></div>
     <div class="panel"><div class="panel-h"><h2>Space check</h2>${fitPill(plan.fit)}</div><div class="panel-b">${checksHTML(plan)}<p class="savestate" style="margin-top:10px">Clearances are planning rules of thumb. Confirm with a swing test and the manufacturer's install specs before ordering.</p></div></div>
   </div>
@@ -1355,7 +1572,7 @@ function builderHTML(plan) {
   const tubeRows = plan.tubes.map((tube) => `<tr><td class="m">${esc(tube.id)}</td><td>${esc(tube.label)}</td><td class="n">${Math.round(tube.len)} ft</td><td>${tube.cable.len} ft ${tube.cable.aoc ? 'active optical HDMI' : 'HDMI'} + USB/Cat6 pull string</td></tr>`).join('');
   return `<div class="sheet-head"><div><h1>Builder Rough-In CAD</h1><p>For the home builder, remodeler, or the homeowner's trades: backing, receptacles, low-voltage, and 2 in tech tubes before drywall. X is from the left wall facing the screen. Y is from the screen wall.</p></div>${titleBlock()}</div>
   <div class="panel"><div class="panel-h"><h2>Reflected ceiling + floor plan</h2><div class="actions"><button type="button" class="btn" data-act="reset-tags">Reset tags</button><button type="button" class="btn" data-act="dl-builder">Download builder sheet</button></div></div><div class="panel-b"><div class="drawing">${planSVG(plan, 'builder')}</div>
-    <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:#2c312f"></i>HUSH 2×2</span><span><i class="sw" style="border-top:2px dashed var(--cad);height:0"></i>Screen centerline</span><span><i class="sw" style="background:var(--backing);opacity:.5"></i>Backing / blocking</span><span><svg width="14" height="14" viewBox="-7 -7 14 14">${elecSym(0, 0, 5.5, 'ceiling')}</svg>Receptacle</span><span><svg width="14" height="14" viewBox="-7 -7 14 14">${elecSym(0, 0, 5.5, 'floor')}</svg>Floor box</span><span><svg width="14" height="14" viewBox="-7 -7 14 14"><polygon class="s-data" points="0,-5 5,4 -5,4"/></svg>Cat6</span><span><i class="sw" style="border-top:2px dashed var(--tube);height:0"></i>2 in tech tube</span><span><i class="sw" style="border:1px dashed var(--bad)"></i>No-fixture ring</span></div>
+    <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:#2c312f"></i>HUSH 2×2</span><span><i class="sw" style="border-top:2px dashed var(--cad);height:0"></i>Screen centerline</span><span><i class="sw" style="background:var(--warn-soft);border:1px dashed var(--warn)"></i>Soffit</span><span><i class="sw" style="background:var(--backing);opacity:.5"></i>Backing / blocking</span><span><svg width="14" height="14" viewBox="-7 -7 14 14">${elecSym(0, 0, 5.5, 'ceiling')}</svg>Receptacle</span><span><svg width="14" height="14" viewBox="-7 -7 14 14">${elecSym(0, 0, 5.5, 'floor')}</svg>Floor box</span><span><svg width="14" height="14" viewBox="-7 -7 14 14"><polygon class="s-data" points="0,-5 5,4 -5,4"/></svg>Cat6</span><span><i class="sw" style="border-top:2px dashed var(--tube);height:0"></i>2 in tech tube</span><span><i class="sw" style="border:1px dashed var(--bad)"></i>No-fixture ring</span></div>
     <p class="savestate" style="margin-top:8px">Click an item to show its distance from the impact screen, each side wall, and the floor. Drag a TV onto the left or right wall; set each TV's size in the specification. The projector and overhead launch monitor stay on the target line.</p></div></div>
   <div class="panel"><div class="panel-h"><h2>Wall elevation</h2>${wallSeg()}</div><div class="panel-b"><div class="drawing">${elevSVG(plan, S.elevWall, 'builder')}</div><p class="savestate" style="margin-top:8px">Click an item to show its distance from the screen, the rear wall, and the floor. Drag it to update the position and height.</p></div></div>
   <div class="panel"><div class="panel-h"><h2>Backing schedule</h2></div><div class="panel-b tablewrap"><table><thead><tr><th>Tag</th><th>Item</th><th>Where</th><th>Spec</th><th>Location</th><th>Size</th></tr></thead><tbody>${backingRows}</tbody></table></div></div>
@@ -1365,7 +1582,7 @@ function builderHTML(plan) {
     <ul class="notes" style="margin-top:10px"><li>2 in ENT (smurf tube) with a pull string. Use sweeps, not 90° elbows. Terminate in a low-voltage ring at each end.</li><li>Runs over 25 ft need active optical HDMI and a powered USB or USB-over-Cat6 extender.</li></ul></div></div>
   </div>
   <div class="panel"><div class="panel-h"><h2>General notes for the trades</h2></div><div class="panel-b"><ul class="notes">
-    <li>Finished ceiling must be at least ${ftin(plan.H)} as drawn. Any soffit, duct, or beam inside the swing ring changes this plan. Send a photo to QuickLinks before framing.</li>
+    <li>${plan.soffits.length ? `Existing soffits are drawn on every view. ${plan.soffits.map((s, index) => `Soffit ${index + 1} is on the ${soffitWhere(s.face).toLowerCase()}, with its bottom ${ftin(s.z0)} above the floor.`).join(' ')} ` : ''}Finished ceiling must be at least ${ftin(plan.H)} as drawn. Any duct, beam, or soffit that is not drawn, and any soffit inside the swing ring, changes this plan. Send a photo to QuickLinks before framing.</li>
     <li>Solid blocking between joists at every ceiling pad, whatever the joist direction. No sprinkler heads, can lights, or HVAC registers inside the no-fixture ring or between the projector and the screen.</li>
     <li>Screen wall: flat, smooth finish. Paint the screen wall and the first 4 ft of ceiling flat black or dark grey to cut reflected light.</li>
     <li>${spec.matCutout ? `Flush mat inset ${ftin(plan.mat.w)} × ${ftin(plan.mat.d)} at the mat location. Slab or subfloor must be level within 1/8 in over 10 ft.` : 'Floor must be level within 1/8 in over 10 ft for the hitting mat.'}</li>
@@ -1767,6 +1984,11 @@ function dragPlace(drag, plan) {
     if (!cup) return null;
     return { name: `Cup ${+drag.index + 1}`, x: cup.x, y: cup.y, z: 0 };
   }
+  if (drag.kind === 'soffit') {
+    const s = plan.soffits[+drag.index];
+    if (!s) return null;
+    return { name: `Soffit ${+drag.index + 1} · ${soffitWhere(s.face)}`, x: s.cx, y: s.cy, z: s.z0 };
+  }
   if (drag.kind === 'mon' && plan.mon) {
     const point = wallXY(plan.mon.wall, plan.mon.a, plan.W, plan.D);
     return { name: 'Monitor', x: point.x, y: point.y, z: plan.mon.z };
@@ -1889,6 +2111,27 @@ function applyDrag(drag, point, svg) {
       x: Math.round(clampNum(nextX, 10, plan.W - 10)),
       y: Math.round(clampNum(nextY, plan.scr.y + 8, plan.D - 10)),
     };
+  } else if (drag.kind === 'soffit') {
+    ensureSoffits(spec);
+    const item = spec.soffits[+drag.index];
+    const drawn = plan.soffits[+drag.index];
+    if (!item || !drawn) return;
+    const sideElev = drag.view === 'elev' && (drag.wall === 'left' || drag.wall === 'right');
+    const endElev = drag.view === 'elev' && (drag.wall === 'screen' || drag.wall === 'rear');
+    if (drawn.face === 'left' || drawn.face === 'right') {
+      if (endElev) return;
+      const span = drawn.y1 - drawn.y0;
+      item.pos = Math.round(clampNum(y, span / 2, plan.D - span / 2));
+    } else if (drawn.face === 'screen') {
+      if (sideElev) return;
+      const span = drawn.x1 - drawn.x0;
+      item.pos = Math.round(clampNum(x, span / 2, plan.W - span / 2));
+    } else {
+      const span = drawn.x1 - drawn.x0;
+      const depth = drawn.y1 - drawn.y0;
+      if (!sideElev) item.pos = Math.round(clampNum(x, span / 2, plan.W - span / 2));
+      if (!endElev) item.posY = Math.round(clampNum(y, depth / 2, plan.D - depth / 2));
+    }
   } else if (drag.kind === 'mon' && plan.mon) {
     const along = plan.mon.wall === 'rear' ? x : y;
     spec.monAlong = Math.round(clampNum(along, 12, plan.mon.wall === 'rear' ? plan.W - 12 : plan.D - 12));

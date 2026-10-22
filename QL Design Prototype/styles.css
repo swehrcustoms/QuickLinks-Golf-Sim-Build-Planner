@@ -547,6 +547,22 @@ tr.grand td { font-family: var(--display); font-size: 22px; border-top: 2px soli
   stroke-width: 3px;
   stroke-linejoin: round;
 }
+.s-soffit {
+  fill: var(--warn-soft);
+  stroke: var(--warn);
+  stroke-width: 1.6;
+  stroke-dasharray: 7 4;
+}
+.s-soffitnum {
+  fill: var(--warn);
+  font-family: var(--mono);
+  font-weight: 500;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.soffitrows { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; }
 .s-mat { fill: var(--sunk); stroke: var(--ink); stroke-width: 1.4; }
 .s-matcut { fill: none; stroke: var(--bad); stroke-width: 1.6; stroke-dasharray: 6 4; }
 .s-strip { fill: var(--green); stroke: var(--turf2); stroke-width: 0.8; }
